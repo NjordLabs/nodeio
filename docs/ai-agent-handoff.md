@@ -3,8 +3,7 @@
 ## Identity
 
 `nodeio` is an async graph engine. Python 3.13. Public repository
-`NjordLabs/nodeio`. The branch `feature-nodeio-engine` starts from
-`origin/feature-ci` and replaces that tree.
+`NjordLabs/nodeio`. `v0.2.0` is the GitHub Release.
 
 ## Scope
 
@@ -21,17 +20,16 @@ sh scripts/check-ci-local.sh
 
 ## Known pitfalls
 
-Quality jobs pull a private `ci-lint` image. They stay red until
-`GHCR_READ_TOKEN` on this repository can read that image.
+`v0.2.0` is released. Quality on that pull request passed.
 
 ## Suggested next work
 
-Publish 0.2.0 after the quality job is green. A serving adapter belongs
-in a separate repository.
+PyPI publish stays open. nodeio-serve `v0.1.0` is the ingress adapter.
 
 ## Recent history
 
 - feat(engine): replace the loader with a ready-queue run
 - fix(quality): split tests, drop Any expressions, and replace random jitter
+- docs(readme): install from the v0.2.0 git tag
 
 *Last updated: 2026-11-22.*
