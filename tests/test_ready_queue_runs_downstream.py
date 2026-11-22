@@ -38,8 +38,8 @@ def test_ready_queue_runs_downstream() -> None:
         (Edge("a", "value", "b", "value"),),
         entries=(("a", "value"),),
     )
-    assert "a -> b" in definition.to_dot()
-    assert "a --> b" in definition.to_mermaid()
+    assert '"a" -> "b"' in definition.to_dot()
+    assert '"a" --> "b"' in definition.to_mermaid()
     outputs = asyncio.run(run(definition, {"a": {"value": 1}}))
     assert outputs["b"]["value"] == 3
     rejected = load((source,), (), entries=(("a", "value"),))

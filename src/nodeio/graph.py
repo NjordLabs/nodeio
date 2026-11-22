@@ -35,12 +35,15 @@ class Edge:
         source_port: Output port name.
         target: Node that consumes the value.
         target_port: Input port name.
+        queue_size: Maximum values waiting on this edge. ``None`` uses
+            the run's ``queue_size``.
     """
 
     source: str
     source_port: str
     target: str
     target_port: str
+    queue_size: int | None = None
 
 
 @dataclass(frozen=True)
@@ -88,7 +91,7 @@ class GraphDefinition:
         """
         lines = ["digraph {"]
         for edge in self.edges:
-            lines.append(f"  {edge.source} -> {edge.target};")
+            lines.append(f"  {_quote_id(edge.source)} -> {_quote_id(edge.target)};")
         lines.append("}")
         return "\n".join(lines)
 
@@ -100,8 +103,15 @@ class GraphDefinition:
         """
         lines = ["flowchart LR"]
         for edge in self.edges:
-            lines.append(f"  {edge.source} --> {edge.target}")
+            lines.append(f"  {_quote_id(edge.source)} --> {_quote_id(edge.target)}")
         return "\n".join(lines)
+
+
+def _quote_id(node_id: str) -> str:
+    escaped = (
+        node_id.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+    )
+    return f'"{escaped}"'
 
 
 def load(
@@ -125,12 +135,19 @@ def load(
     edge_tuple = tuple(edges)
     entry_tuple = tuple(entries)
     _unique_ids(node_tuple)
+    _check_bounds(edge_tuple)
     by_id = {node.id: node for node in node_tuple}
     _check_edges(by_id, edge_tuple)
     _check_entries(by_id, entry_tuple, edge_tuple)
     _check_cycle(node_tuple, edge_tuple)
     side_pairs = tuple((key, side[key]) for key in side) if side else ()
     return GraphDefinition(node_tuple, edge_tuple, entry_tuple, side_pairs)
+
+
+def _check_bounds(edges: tuple[Edge, ...]) -> None:
+    for edge in edges:
+        if edge.queue_size is not None and edge.queue_size < 1:
+            raise GraphError("queue_size must be at least 1")
 
 
 def _unique_ids(nodes: tuple[Node, ...]) -> None:
