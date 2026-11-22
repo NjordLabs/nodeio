@@ -3,8 +3,8 @@
 ## Identity
 
 `nodeio` is an async graph engine. Python 3.13 and 3.14. Public
-repository `NjordLabs/nodeio`. `v0.3.0` is the GitHub Release:
-https://github.com/NjordLabs/nodeio/releases/tag/v0.3.0
+repository `NjordLabs/nodeio`. [`v0.3.0`](https://github.com/NjordLabs/nodeio/releases/tag/v0.3.0)
+is the GitHub Release.
 The wheel sha256 is
 `b8d05cd111165e9e7ed01ce49af15917e5b5c17be3298a624f4ddb6c7b8038b9`.
 
