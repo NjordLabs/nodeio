@@ -875,7 +875,7 @@ wheels = [
 
 [[package]]
 name = "nodeio"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "mimirlog" },
@@ -901,6 +901,9 @@ grpc = [
 http = [
     { name = "httpx" },
 ]
+otel = [
+    { name = "opentelemetry-api" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -913,13 +916,26 @@ requires-dist = [
     { name = "interrogate", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "mimirlog", url = "https://github.com/NjordLabs/mimirlog/archive/9b4e3c5dba1fd862c6e9c770d072e06d7637694e.tar.gz" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.20.2" },
+    { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.27" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "pymjolnir", url = "https://github.com/NjordLabs/pymjolnir/archive/aa9a2ee85fafd2102bfdb0a5b3bb97d194715d20.tar.gz" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.12" },
 ]
-provides-extras = ["dev", "grpc", "http"]
+provides-extras = ["dev", "grpc", "http", "otel"]
+
+[[package]]
+name = "opentelemetry-api"
+version = "1.45.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/19/14/cf3a6b6448849656e1e5f4e2101f3988dc6789724050096aba1bc5ccf592/opentelemetry_api-1.45.2.tar.gz", hash = "sha256:d7b0008e21e5fd61cbe7a7f34ca3b6905a78ab677d9bc395e299359c75cda6b4", size = 73277, upload-time = "2026-10-29T17:29:37.888Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a9/2d/610db864d7513158cebb8f36cc88e67e73bd6c7aa1905ef18d89e1281c81/opentelemetry_api-1.45.2-py3-none-any.whl", hash = "sha256:2cbd737377e710ee740d261c94e93fa0f08e6d037c18f17513cc0a2d94479a34", size = 60335, upload-time = "2026-10-29T17:29:06.955Z" },
+]
 
 [[package]]
 name = "packaging"
