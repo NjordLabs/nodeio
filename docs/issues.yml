@@ -105,3 +105,155 @@ milestones:
           sync is not available yet.
         guardrail_refs:
           - PY-CONC-001
+      - id: LIFE-001
+        status: open
+        title: Give nodes an open, process, and close lifecycle
+        overview:
+          problem: >-
+            A node is a runner callable. It cannot open a resource
+            before the first request or close it after the last.
+          goal: >-
+            A node can open, process, and close without changing the
+            request-shaped scheduler.
+        decision: >-
+          In the context of a request-shaped graph, facing nodes that
+          hold resources, we decided to record a lifecycle as follow-up
+          work, to achieve a releasable runner now, accepting that
+          resources are opened inside the runner.
+        guardrail_refs:
+          - PY-CONC-001
+        tasks:
+          - id: LIFE-001-T1
+            status: open
+            title: Call open and close around a node's process method
+            instructions:
+              files:
+                - src/nodeio/graph.py
+                - src/nodeio/run.py
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-TEST-002
+      - id: FLOW-001
+        status: open
+        title: Bound queues between nodes
+        overview:
+          problem: >-
+            The scheduler limits how many nodes run at once. It does
+            not bound the values waiting on an edge.
+          goal: >-
+            A producer blocks when a downstream queue is full.
+        decision: >-
+          In the context of a request-shaped graph, facing unbounded
+          edges, we decided to leave flow control for a later change,
+          to achieve a small scheduler now, accepting that a fast
+          producer can hold an entire request in memory.
+        guardrail_refs:
+          - PY-CONC-001
+        tasks:
+          - id: FLOW-001-T1
+            status: open
+            title: Add a bounded queue and backpressure on edges
+            instructions:
+              files:
+                - src/nodeio/run.py
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-TEST-002
+      - id: GRPC-001
+        status: open
+        title: Call gRPC through a real channel
+        overview:
+          problem: >-
+            The gRPC node requires an injected call. The default path
+            reports that the grpc extra is not installed.
+          goal: >-
+            An installed extra opens a TLS channel with the required
+            deadline.
+        decision: >-
+          In the context of a client node, facing a missing channel,
+          we decided to keep the injected call and record the channel
+          as follow-up, to achieve a releasable pipe now, accepting
+          that callers must pass the call.
+        guardrail_refs:
+          - PY-TEST-002
+        tasks:
+          - id: GRPC-001-T1
+            status: open
+            title: Open a TLS grpcio.aio channel from the grpc extra
+            instructions:
+              files:
+                - src/nodeio/pipes.py
+                - pyproject.toml
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-TEST-002
+      - id: OTEL-001
+        status: open
+        title: Export node spans from an optional extra
+        overview:
+          problem: >-
+            Logging events have a run id and a duration. They are not
+            OpenTelemetry spans.
+          goal: >-
+            An extra can emit a span per node without a required
+            dependency.
+        decision: >-
+          In the context of a graph run, facing a request for traces,
+          we decided to keep the logging observer and record an
+          OpenTelemetry extra as follow-up, to achieve a release
+          without the SDK, accepting that traces are not exported yet.
+        guardrail_refs:
+          - PY-TEST-002
+        tasks:
+          - id: OTEL-001-T1
+            status: open
+            title: Add an OpenTelemetry observer extra
+            instructions:
+              files:
+                - src/nodeio/observe.py
+                - pyproject.toml
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-TEST-002
+      - id: HOST-001
+        status: open
+        title: Cover Python 3.14 and the container CI script
+        overview:
+          problem: >-
+            The test matrix is Python 3.13, and the container parity
+            script lives in the scaffold submodule rather than scripts/.
+          goal: >-
+            The test job can run on 3.14, and a repo-level script can
+            run the remaining tools in Docker.
+        decision: >-
+          In the context of the first release, facing a single
+          interpreter, we decided to ship 3.13 and record the rest,
+          to achieve a green release now, accepting that 3.14 and the
+          repo-level container script are follow-up work.
+        guardrail_refs:
+          - PY-TEST-002
+        tasks:
+          - id: HOST-001-T1
+            status: open
+            title: Run the test job on Python 3.14
+            instructions:
+              files:
+                - .github/workflows/ci-quality.yml
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-TEST-002
+          - id: HOST-001-T2
+            status: open
+            title: Add a repo-level container CI script
+            instructions:
+              files:
+                - scripts/check-ci-docker.sh
+            verification:
+              - sh scripts/check-ci-docker.sh
+            guardrail_refs:
+              - PY-TEST-002
