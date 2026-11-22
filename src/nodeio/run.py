@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import time
+import uuid
 from collections.abc import Mapping
 
 from nodeio.errors import GraphError
@@ -54,6 +56,7 @@ async def run(
     pending = {node.id: node for node in definition.nodes}
     semaphore = asyncio.Semaphore(limit)
     publish = asyncio.Lock()
+    run_id = uuid.uuid4().hex
     while pending:
         ready = [node for node in pending.values() if _inputs_ready(node, values)]
         if not ready:
@@ -72,6 +75,7 @@ async def run(
                 publish,
                 timeout,
                 policy,
+                run_id,
             )
             for node in ready
         ])
@@ -114,21 +118,31 @@ async def _launch(
     publish: asyncio.Lock,
     timeout: float | None,
     policy: str,
+    run_id: str,
 ) -> None:
     inputs = {port.name: values[(node.id, port.name)] for port in node.inputs}
     if observer is not None:
-        observer.on_start(definition, node.id)
+        observer.on_start(definition, node.id, run_id=run_id)
     async with semaphore:
+        started = time.perf_counter()
         try:
             result = await asyncio.wait_for(executor.run(node, inputs, side), timeout)
         except Exception as exc:
+            duration_s = time.perf_counter() - started
             if observer is not None:
-                observer.on_exception(definition, node.id, type(exc).__name__)
+                observer.on_exception(
+                    definition,
+                    node.id,
+                    type(exc).__name__,
+                    run_id=run_id,
+                    duration_s=duration_s,
+                )
             if policy == "fail":
                 raise GraphError(f"node {node.id} failed: {type(exc).__name__}") from exc
             return
+        duration_s = time.perf_counter() - started
     if observer is not None:
-        observer.on_success(definition, node.id)
+        observer.on_success(definition, node.id, run_id=run_id, duration_s=duration_s)
     async with publish:
         for edge in definition.edges:
             if edge.source == node.id and edge.source_port in result:

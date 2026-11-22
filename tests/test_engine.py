@@ -265,6 +265,8 @@ def test_observer_omits_values(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(text.strip().splitlines()[-1])
     assert payload["message"]["node"] == "a"
     assert payload["message"]["event"] == "success"
+    assert payload["message"]["run_id"]
+    assert payload["message"]["duration_s"] >= 0
 
 
 def test_gate_mux_demux_and_subgraph() -> None:
@@ -351,6 +353,39 @@ def test_http_policy_and_retry() -> None:
         asyncio.run(run(graph, {"c": {"method": "GET", "url": "https://no.test"}}))
     assert isinstance(blocked_host.value.__cause__, GraphError)
     assert "not allowed" in str(blocked_host.value.__cause__)
+
+
+def test_http_backoff_waits_between_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An idempotent retry waits with exponential backoff."""
+    delays: list[float] = []
+
+    async def sleep(delay: float) -> None:
+        delays.append(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", sleep)
+    monkeypatch.setattr("nodeio.pipes.random.uniform", lambda _low, _high: 1.0)
+
+    class Client:
+        """Hold a test double."""
+
+        def __init__(self) -> None:
+            """Count calls."""
+            self.calls = 0
+
+        async def request(self, method: str, url: str, timeout: float) -> SimpleNamespace:
+            """Return a server error and then success."""
+            del method, url, timeout
+            self.calls += 1
+            status = 500 if self.calls == 1 else 200
+            return SimpleNamespace(status_code=status, content=b"ok")
+
+    node = http_node("h", timeout=1, retries=2, backoff=0.2, client=Client())
+    definition = load((node,), (), entries=(("h", "method"), ("h", "url")))
+    outputs = asyncio.run(
+        run(definition, {"h": {"method": "GET", "url": "https://example.test/item"}})
+    )
+    assert outputs["h"]["status"] == 200
+    assert delays == [0.2]
 
 
 def test_http_does_not_retry_post_and_caps_the_body() -> None:
@@ -483,11 +518,19 @@ def test_remaining_branches(monkeypatch: pytest.MonkeyPatch) -> None:
             del method, url
             return SimpleNamespace(status_code=204, content=b"")
 
-    monkeypatch.setattr("httpx.AsyncClient", lambda **_kwargs: Owned())
-    plain = http_node("h", timeout=1)
+    seen: dict[str, object] = {}
+
+    def factory(**kwargs: object) -> Owned:
+        seen.update(kwargs)
+        return Owned()
+
+    monkeypatch.setattr("httpx.AsyncClient", factory)
+    plain = http_node("h", timeout=1, verify="/ca.pem", cert=("cert.pem", "key.pem"))
     graph = load((plain,), (), entries=(("h", "method"), ("h", "url")))
     status = asyncio.run(run(graph, {"h": {"method": "GET", "url": "https://example.test"}}))
     assert status["h"]["status"] == 204
+    assert seen["verify"] == "/ca.pem"
+    assert seen["cert"] == ("cert.pem", "key.pem")
 
     class Weird:
         """Hold a test double."""

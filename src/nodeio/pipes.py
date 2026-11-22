@@ -6,8 +6,12 @@ transport. Only idempotent HTTP methods are retried. Bodies are not logged.
 
 from __future__ import annotations
 
+import asyncio
+import random
 from collections.abc import Awaitable, Callable, Mapping
 from urllib.parse import urlparse
+
+from mimirlog import get_logger
 
 from nodeio.errors import GraphError
 from nodeio.graph import Node, Port
@@ -25,6 +29,9 @@ def http_node(
     max_bytes: int = 1_000_000,
     retries: int = 0,
     client: object | None = None,
+    verify: bool | str = True,
+    cert: tuple[str, str] | None = None,
+    backoff: float = 0.0,
 ) -> Node:
     """Build a node that performs one HTTP request.
 
@@ -36,6 +43,11 @@ def http_node(
         max_bytes: Maximum response body size.
         retries: Extra attempts for idempotent methods.
         client: Object with an async ``request`` method. Tests inject one.
+        verify: ``True``, ``False``, or a CA bundle path for the owned client.
+        cert: Certificate and key paths for mutual TLS on the owned client.
+        backoff: Base delay in seconds before a retry. Zero disables the wait.
+            The delay doubles each retry and is scaled by a random factor
+            between one half and one.
 
     Returns:
         A node. Inputs are ``method`` and ``url``. Output is ``status``.
@@ -53,9 +65,13 @@ def http_node(
         _check_url(url, allow_insecure=allow_insecure, allow_hosts=allow_hosts)
         attempts = retries + 1 if method in _IDEMPOTENT else 1
         last: dict[str, object] = {"status": 0}
-        for _ in range(attempts):
-            last = await _once(client, method, url, timeout, max_bytes)
+        for attempt in range(attempts):
+            if attempt and backoff > 0:
+                delay = backoff * (2 ** (attempt - 1)) * random.uniform(0.5, 1.0)
+                await asyncio.sleep(delay)
+            last = await _once(client, method, url, timeout, max_bytes, verify, cert)
             status = last["status"]
+            _log_http(method, url, status, attempt)
             if not isinstance(status, int):
                 raise GraphError("status must be an int")
             if status < 500 or method not in _IDEMPOTENT:
@@ -81,17 +97,30 @@ def _check_url(url: str, *, allow_insecure: bool, allow_hosts: tuple[str, ...]) 
         raise GraphError(f"host {parsed.hostname} is not allowed")
 
 
+def _log_http(method: str, url: str, status: object, attempt: int) -> None:
+    host = urlparse(url).hostname or ""
+    get_logger("nodeio.http").info({
+        "attempt": attempt,
+        "event": "http",
+        "host": host,
+        "method": method,
+        "status": status,
+    })
+
+
 async def _once(
     client: object | None,
     method: str,
     url: str,
     timeout: float,
     max_bytes: int,
+    verify: bool | str,
+    cert: tuple[str, str] | None,
 ) -> dict[str, object]:
     if client is None:
         import httpx
 
-        async with httpx.AsyncClient(timeout=timeout, verify=True) as owned:
+        async with httpx.AsyncClient(timeout=timeout, verify=verify, cert=cert) as owned:
             response = await owned.request(method, url)
             body = response.content
             status = response.status_code
