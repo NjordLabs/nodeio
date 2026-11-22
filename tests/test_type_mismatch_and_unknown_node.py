@@ -45,17 +45,13 @@ def test_factory_mixes_kinds() -> None:
                 raise TypeError("value must be an int")
             return {"value": value * scale}
 
-        return Node(
-            node_id, "scale", (Port("value", "int"),), (Port("value", "int"),), runner
-        )
+        return Node(node_id, "scale", (Port("value", "int"),), (Port("value", "int"),), runner)
 
     register("scale", make)
     built = create("scale", "n", scale=3)
     other = Node("src", "const", (), (Port("value", "int"),))
 
-    async def source(
-        inputs: Mapping[str, object], side: Mapping[str, object]
-    ) -> dict[str, object]:
+    async def source(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
         """Run this step."""
         del inputs, side
         return {"value": 2}

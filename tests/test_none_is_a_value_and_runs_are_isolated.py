@@ -20,9 +20,7 @@ from tests.support import async_node
 def test_none_is_a_value_and_runs_are_isolated() -> None:
     """Run this step."""
     node = async_node("a")
-    definition = load(
-        (node,), (), entries=(("a", "value"),), side={"seen": "from-side"}
-    )
+    definition = load((node,), (), entries=(("a", "value"),), side={"seen": "from-side"})
 
     async def both() -> tuple[object, object]:
         """Run this step."""
@@ -33,17 +31,13 @@ def test_none_is_a_value_and_runs_are_isolated() -> None:
         return left["a"]["value"], right["a"]["value"]
 
     assert asyncio.run(both()) == (None, 1)
-    assert (
-        asyncio.run(run(definition, {"a": {"value": None}}))["a"]["seen"] == "from-side"
-    )
+    assert asyncio.run(run(definition, {"a": {"value": None}}))["a"]["seen"] == "from-side"
 
 
 def test_failure_names_the_node_and_collect_continues() -> None:
     """Run this step."""
 
-    async def boom(
-        inputs: Mapping[str, object], side: Mapping[str, object]
-    ) -> dict[str, object]:
+    async def boom(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
         """Run this step."""
         del inputs, side
         raise RuntimeError("secret body")
@@ -59,9 +53,7 @@ def test_failure_names_the_node_and_collect_continues() -> None:
 def test_timeout_and_limit() -> None:
     """Run this step."""
 
-    async def slow(
-        inputs: Mapping[str, object], side: Mapping[str, object]
-    ) -> dict[str, object]:
+    async def slow(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
         """Run this step."""
         del inputs, side
         await asyncio.sleep(1)

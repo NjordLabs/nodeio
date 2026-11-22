@@ -12,9 +12,7 @@ async def http_exchange(
 ) -> tuple[int, bytes]: ...
 
 class Observer:
-    def on_start(
-        self, definition: GraphDefinition, node_id: str, *, run_id: str
-    ) -> None: ...
+    def on_start(self, definition: GraphDefinition, node_id: str, *, run_id: str) -> None: ...
     def on_success(
         self,
         definition: GraphDefinition,

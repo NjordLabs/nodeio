@@ -14,5 +14,5 @@
   ],
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
-  "ruff.configuration": "ruff.toml"
+  "ruff.configuration": "pyproject.toml"
 }

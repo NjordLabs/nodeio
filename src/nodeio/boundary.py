@@ -57,9 +57,7 @@ async def http_exchange(
 class Observer(Protocol):
     """Notifications for one node attempt."""
 
-    def on_start(
-        self, definition: GraphDefinition, node_id: str, *, run_id: str
-    ) -> None:
+    def on_start(self, definition: GraphDefinition, node_id: str, *, run_id: str) -> None:
         """A node is about to run.
 
         Args:

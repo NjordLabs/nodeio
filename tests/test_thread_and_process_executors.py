@@ -20,16 +20,12 @@ from tests.workers import double
 def test_thread_and_process_executors() -> None:
     """Run this step."""
 
-    def sync(
-        inputs: Mapping[str, object], side: Mapping[str, object]
-    ) -> dict[str, object]:
+    def sync(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
         """Run this step."""
         del side
         return {"value": inputs["value"]}
 
-    threaded = Node(
-        "t", "map", (Port("value", "any"),), (Port("value", "any"),), sync, "thread"
-    )
+    threaded = Node("t", "map", (Port("value", "any"),), (Port("value", "any"),), sync, "thread")
     processed = Node(
         "p",
         "map",

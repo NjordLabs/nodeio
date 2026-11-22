@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from nodeio.boundary import Observer, named_logger
+from nodeio.boundary import Observer as Observer
+from nodeio.boundary import named_logger
 from nodeio.graph import GraphDefinition
 
 
@@ -24,9 +25,7 @@ class LoggingObserver(Observer):
         self._graph = graph
         self._logger: logging.Logger = named_logger("nodeio")
 
-    def on_start(
-        self, definition: GraphDefinition, node_id: str, *, run_id: str
-    ) -> None:
+    def on_start(self, definition: GraphDefinition, node_id: str, *, run_id: str) -> None:
         """Log that ``node_id`` is starting.
 
         Args:

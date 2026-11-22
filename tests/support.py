@@ -11,9 +11,7 @@ from nodeio import Node, Port
 def async_node(node_id: str, kind: str = "map") -> Node:
     """Build a node that echoes its value and the side packet."""
 
-    async def runner(
-        inputs: Mapping[str, object], side: Mapping[str, object]
-    ) -> dict[str, object]:
+    async def runner(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
         """Echo the input and the side packet."""
         await asyncio.sleep(0)
         seen = side.get("seen")
@@ -34,9 +32,7 @@ async def number(inputs: Mapping[str, object], side: Mapping[str, object]) -> in
     return 1
 
 
-async def boom(
-    inputs: Mapping[str, object], side: Mapping[str, object]
-) -> dict[str, object]:
+async def boom(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
     """Raise so the scheduler records a failure."""
     del inputs, side
     raise RuntimeError("nope")
@@ -45,9 +41,7 @@ async def boom(
 def identity() -> Callable[..., object]:
     """Build a runner that copies ``value``."""
 
-    async def runner(
-        inputs: Mapping[str, object], side: Mapping[str, object]
-    ) -> dict[str, object]:
+    async def runner(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
         """Copy the input value."""
         del side
         return {"value": inputs["value"]}

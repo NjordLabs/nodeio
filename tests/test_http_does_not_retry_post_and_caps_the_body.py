@@ -26,9 +26,7 @@ def test_http_does_not_retry_post_and_caps_the_body() -> None:
             """Run this step."""
             self.calls = 0
 
-        async def request(
-            self, method: str, url: str, timeout: float
-        ) -> SimpleNamespace:
+        async def request(self, method: str, url: str, timeout: float) -> SimpleNamespace:
             """Run this step."""
             del method, url, timeout
             self.calls += 1
@@ -38,9 +36,7 @@ def test_http_does_not_retry_post_and_caps_the_body() -> None:
     node = http_node("h", timeout=1, retries=3, max_bytes=2, client=client)
     definition = load((node,), (), entries=(("h", "method"), ("h", "url")))
     with pytest.raises(GraphError, match="node h failed") as too_big:
-        asyncio.run(
-            run(definition, {"h": {"method": "POST", "url": "https://example.test"}})
-        )
+        asyncio.run(run(definition, {"h": {"method": "POST", "url": "https://example.test"}}))
     assert isinstance(too_big.value.__cause__, GraphError)
     assert "max_bytes" in str(too_big.value.__cause__)
     assert client.calls == 1

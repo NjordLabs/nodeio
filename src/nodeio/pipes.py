@@ -81,9 +81,7 @@ def http_node(
     if timeout <= 0:
         raise GraphError("timeout must be positive")
 
-    async def runner(
-        inputs: Mapping[str, object], side: Mapping[str, object]
-    ) -> dict[str, object]:
+    async def runner(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
         """Perform the HTTP request described by the node inputs.
 
         Returns:
@@ -201,9 +199,7 @@ def grpc_node(
     if insecure and call is None:
         raise GraphError("insecure gRPC requires an explicit channel")
 
-    async def runner(
-        inputs: Mapping[str, object], side: Mapping[str, object]
-    ) -> dict[str, object]:
+    async def runner(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
         """Perform the unary call described by the node inputs.
 
         Returns:

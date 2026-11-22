@@ -43,9 +43,7 @@ def test_owned_client_receives_tls_material(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr("httpx.AsyncClient", factory)
     plain = http_node("h", timeout=1, verify="/ca.pem", cert=("cert.pem", "key.pem"))
     graph = load((plain,), (), entries=(("h", "method"), ("h", "url")))
-    status = asyncio.run(
-        run(graph, {"h": {"method": "GET", "url": "https://example.test"}})
-    )
+    status = asyncio.run(run(graph, {"h": {"method": "GET", "url": "https://example.test"}}))
     assert status["h"]["status"] == 204
     assert seen["verify"] == "/ca.pem"
     assert seen["cert"] == ("cert.pem", "key.pem")

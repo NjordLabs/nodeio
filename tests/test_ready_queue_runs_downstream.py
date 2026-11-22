@@ -23,9 +23,7 @@ from tests.support import async_node
 def test_ready_queue_runs_downstream() -> None:
     """Run this step."""
 
-    async def add(
-        inputs: Mapping[str, object], side: Mapping[str, object]
-    ) -> dict[str, object]:
+    async def add(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
         """Run this step."""
         del side
         value = inputs["value"]
@@ -64,9 +62,7 @@ def test_observer_omits_values(capsys: pytest.CaptureFixture[str]) -> None:
     configure()
     node = async_node("a")
     definition = load((node,), (), entries=(("a", "value"),))
-    asyncio.run(
-        run(definition, {"a": {"value": "secret"}}, observer=LoggingObserver("demo"))
-    )
+    asyncio.run(run(definition, {"a": {"value": "secret"}}, observer=LoggingObserver("demo")))
     captured = capsys.readouterr()
     text = captured.err + captured.out
     assert "secret" not in text

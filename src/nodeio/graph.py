@@ -153,9 +153,7 @@ def _port(node: Node, name: str, outputs: bool) -> Port:
 def _check_edges(by_id: dict[str, Node], edges: tuple[Edge, ...]) -> None:
     for edge in edges:
         if edge.source not in by_id or edge.target not in by_id:
-            raise GraphError(
-                f"edge names an unknown node {edge.source} -> {edge.target}"
-            )
+            raise GraphError(f"edge names an unknown node {edge.source} -> {edge.target}")
         source = _port(by_id[edge.source], edge.source_port, outputs=True)
         target = _port(by_id[edge.target], edge.target_port, outputs=False)
         if source.annotation != target.annotation:

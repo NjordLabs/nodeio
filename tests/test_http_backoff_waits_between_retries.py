@@ -32,9 +32,7 @@ def test_http_backoff_waits_between_retries(monkeypatch: pytest.MonkeyPatch) -> 
             """Count calls."""
             self.calls = 0
 
-        async def request(
-            self, method: str, url: str, timeout: float
-        ) -> SimpleNamespace:
+        async def request(self, method: str, url: str, timeout: float) -> SimpleNamespace:
             """Return a server error and then success."""
             del method, url, timeout
             self.calls += 1

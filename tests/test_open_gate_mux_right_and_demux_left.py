@@ -23,12 +23,8 @@ from nodeio import (
 def test_open_gate_mux_right_and_demux_left() -> None:
     """Run this step."""
     opened = load((gate("g"),), (), entries=(("g", "open"), ("g", "value")))
-    assert (
-        asyncio.run(run(opened, {"g": {"open": True, "value": 3}}))["g"]["value"] == 3
-    )
-    chosen = load(
-        (mux("m"),), (), entries=(("m", "select"), ("m", "left"), ("m", "right"))
-    )
+    assert asyncio.run(run(opened, {"g": {"open": True, "value": 3}}))["g"]["value"] == 3
+    chosen = load((mux("m"),), (), entries=(("m", "select"), ("m", "left"), ("m", "right")))
     muxed = asyncio.run(run(chosen, {"m": {"select": "right", "left": 1, "right": 2}}))
     assert muxed["m"]["value"] == 2
     split = load((demux("d"),), (), entries=(("d", "key"), ("d", "value")))
@@ -52,9 +48,7 @@ def test_unknown_ports_and_a_stalled_edge() -> None:
         (Edge("a", "value", "b", "value"), Edge("c", "value", "b", "value")),
     )
 
-    async def empty(
-        inputs: Mapping[str, object], side: Mapping[str, object]
-    ) -> dict[str, object]:
+    async def empty(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
         """Run this step."""
         del inputs, side
         return {}

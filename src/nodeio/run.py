@@ -85,9 +85,7 @@ def _seed(
             values[(node_id, port)] = value
             provided.add((node_id, port))
     missing = [
-        f"{node}.{port}"
-        for node, port in definition.entries
-        if (node, port) not in provided
+        f"{node}.{port}" for node, port in definition.entries if (node, port) not in provided
     ]
     if missing:
         raise GraphError("missing inputs " + ", ".join(missing))
