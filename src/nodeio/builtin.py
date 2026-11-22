@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from nodeio.errors import GraphError
 from nodeio.graph import Edge, GraphDefinition, Node, Port, load
 
 _SUBGRAPHS: dict[str, GraphDefinition] = {}
@@ -56,9 +57,15 @@ def gate(node_id: str) -> Node:
 
         Returns:
             The output mapping.
+
+        Raises:
+            GraphError: ``open`` is not a bool.
         """
         _ = side
-        if inputs["open"]:
+        opened = inputs["open"]
+        if not isinstance(opened, bool):
+            raise GraphError("open must be a bool")
+        if opened:
             return {"value": inputs["value"]}
         return {"value": None}
 
@@ -86,10 +93,15 @@ def mux(node_id: str) -> Node:
 
         Returns:
             The output mapping.
+
+        Raises:
+            GraphError: ``select`` is not ``left`` or ``right``.
         """
         _ = side
-        chosen = "left" if inputs["select"] == "left" else "right"
-        return {"value": inputs[chosen]}
+        selected = inputs["select"]
+        if selected not in {"left", "right"}:
+            raise GraphError("select must be left or right")
+        return {"value": inputs[str(selected)]}
 
     return Node(
         node_id,
@@ -135,7 +147,8 @@ def subgraph_node(node_id: str, name: str) -> Node:
     """Run the subgraph registered as ``name``.
 
     The subgraph must have a single entry node ``in`` with port ``value``
-    and a single output node ``out`` with port ``value``.
+    and a single output node ``out`` with port ``value``. The child run
+    receives the parent's limit, timeout, policy, observer, and executor.
 
     Args:
         node_id: Node id in the parent graph.
@@ -150,12 +163,29 @@ def subgraph_node(node_id: str, name: str) -> Node:
 
         Returns:
             The child output.
+
+        Raises:
+            GraphError: The child graph did not produce ``out.value``.
         """
         _ = side
-        from nodeio.run import run
+        from nodeio.run import current_options, run
 
+        options = current_options()
         child = subgraph(name)
-        outputs = await run(child, {"in": {"value": inputs["value"]}})
+        outputs = await run(
+            child,
+            {"in": {"value": inputs["value"]}},
+            executor=options.executor,
+            observer=options.observer,
+            limit=options.limit,
+            timeout=options.timeout,
+            policy=options.policy,
+            cancel=options.cancel,
+            queue_size=options.queue_size,
+            on_output=options.on_output,
+        )
+        if "out" not in outputs or "value" not in outputs["out"]:
+            raise GraphError("subgraph produced no value")
         return {"value": outputs["out"]["value"]}
 
     return Node(
