@@ -3,16 +3,93 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
+import logging
 import time
 import uuid
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
+from typing import Literal
 
 from nodeio.errors import GraphError
 from nodeio.executors import Executor, LocalExecutor
-from nodeio.graph import GraphDefinition, Node
+from nodeio.flow import EdgeBuffer
+from nodeio.graph import Edge, GraphDefinition, Node
 from nodeio.observe import Observer
 
 Values = dict[tuple[str, str], object]
+Policy = Literal["fail", "collect"]
+OutputCallback = Callable[[str, str, object], Awaitable[None] | None]
+
+
+@dataclass(frozen=True)
+class RunOptions:  # pylint: disable=too-many-instance-attributes
+    """Options the active :func:`run` is using.
+
+    A subgraph copies these into the child run so limit, timeout, policy,
+    observer, and executor stay the same. Thread and process workers cannot
+    be stopped by cancellation; they run until they return.
+
+    Attributes:
+        limit: Maximum number of nodes running at once.
+        timeout: Seconds for one node. ``None`` waits without a limit.
+        policy: ``fail`` or ``collect``.
+        observer: Optional start, success, and exception hook.
+        executor: Dispatcher for this run. ``None`` when no run is active.
+        cancel: Event that cancels in-flight async node tasks.
+        queue_size: Default maximum queued values on an edge.
+        on_output: Called when a node publishes an output.
+    """
+
+    limit: int = 8
+    timeout: float | None = None
+    policy: Policy = "fail"
+    observer: Observer | None = None
+    executor: Executor | None = None
+    cancel: asyncio.Event | None = None
+    queue_size: int | None = None
+    on_output: OutputCallback | None = None
+
+
+_OPTIONS: contextvars.ContextVar[RunOptions | None] = contextvars.ContextVar(
+    "nodeio_run_options",
+    default=None,
+)
+
+
+def current_options() -> RunOptions:
+    """Return the options of the active run, or the defaults.
+
+    Returns:
+        The options set by :func:`run`, or defaults matching that function.
+    """
+    options = _OPTIONS.get()
+    if options is None:
+        return RunOptions()
+    return options
+
+
+@dataclass
+class _State:  # pylint: disable=too-many-instance-attributes
+    """Mutable values for one invocation of :func:`run`."""
+
+    definition: GraphDefinition
+    values: Values
+    side: Mapping[str, object]
+    outputs: dict[str, Mapping[str, object]]
+    pending: dict[str, Node]
+    failed: set[str]
+    executor: Executor
+    observer: Observer | None
+    semaphore: asyncio.Semaphore
+    publish: asyncio.Lock
+    timeout: float | None
+    policy: Policy
+    run_id: str
+    cancel: asyncio.Event | None
+    queue_size: int | None
+    on_output: OutputCallback | None
+    queues: EdgeBuffer
 
 
 async def run(
@@ -24,11 +101,20 @@ async def run(
     limit: int = 8,
     timeout: float | None = None,
     policy: str = "fail",
+    cancel: asyncio.Event | None = None,
+    queue_size: int | None = None,
+    on_output: OutputCallback | None = None,
 ) -> dict[str, Mapping[str, object]]:
     """Run ``definition`` once.
 
     Concurrent runs must not share a seed mapping. The definition is
-    immutable and can be shared.
+    immutable and can be shared. An executor created for this call is
+    closed when the call ends. A caller-supplied executor is left open.
+
+    Cancellation of this task, or setting ``cancel``, cancels in-flight
+    async node tasks. ``close`` still runs for a lifecycle node. Thread
+    and process workers cannot be stopped by cancellation; they run
+    until they return.
 
     Args:
         definition: Validated graph.
@@ -38,46 +124,87 @@ async def run(
         limit: Maximum number of nodes running at once.
         timeout: Seconds for one node. ``None`` waits without a limit.
         policy: ``fail`` raises on the first node error. ``collect``
-            records the error and leaves that node's outputs unset.
+            records the error, skips dependents, and returns the rest.
+        cancel: When set, in-flight async node tasks are cancelled.
+        queue_size: Default bound on values waiting on an edge.
+            ``None`` does not bound the edge. A full edge makes the
+            producer wait instead of dropping the value.
+        on_output: Called with the node id, port, and value when a node
+            publishes an output.
 
     Returns:
-        Output mappings keyed by node id.
+        Output mappings keyed by node id. Nodes that failed or were
+        skipped under ``collect`` are absent.
 
     Raises:
-        GraphError: A seed is missing, a node fails under ``fail``, or
-            the ready set is empty before every node has run.
+        GraphError: A seed is missing, ``policy`` is unknown, a node
+            fails under ``fail``, or the ready set is empty before
+            every runnable node has run.
     """
+    if policy not in {"fail", "collect"}:
+        raise GraphError("policy must be fail or collect")
     if limit < 1:
         raise GraphError("limit must be at least 1")
-    chosen = executor if executor is not None else LocalExecutor()
-    values = _seed(definition, seeds)
-    side = dict(definition.side)
-    outputs: dict[str, Mapping[str, object]] = {}
-    pending = {node.id: node for node in definition.nodes}
-    semaphore = asyncio.Semaphore(limit)
-    publish = asyncio.Lock()
-    run_id = uuid.uuid4().hex
-    await _schedule(
-        definition,
-        values,
-        side,
-        outputs,
-        pending,
-        chosen,
-        observer,
-        semaphore,
-        publish,
-        timeout,
-        policy,
-        run_id,
+    if queue_size is not None and queue_size < 1:
+        raise GraphError("queue_size must be at least 1")
+    chosen_policy: Policy = "collect" if policy == "collect" else "fail"
+    created: LocalExecutor | None = None
+    if executor is None:
+        created = LocalExecutor()
+        chosen: Executor = created
+    else:
+        chosen = executor
+    options = RunOptions(
+        limit=limit,
+        timeout=timeout,
+        policy=chosen_policy,
+        observer=observer,
+        executor=chosen,
+        cancel=cancel,
+        queue_size=queue_size,
+        on_output=on_output,
     )
-    return outputs
+    try:
+        state = _state(definition, seeds, chosen, options)
+        token = _OPTIONS.set(options)
+        try:
+            await _schedule(state)
+        finally:
+            _OPTIONS.reset(token)
+        return state.outputs
+    finally:
+        if created is not None:
+            created.close()
 
 
-def _seed(
+def _state(
     definition: GraphDefinition,
     seeds: Mapping[str, Mapping[str, object]],
-) -> Values:
+    executor: Executor,
+    options: RunOptions,
+) -> _State:
+    return _State(
+        definition=definition,
+        values=_seed(definition, seeds),
+        side=dict(definition.side),
+        outputs={},
+        pending={node.id: node for node in definition.nodes},
+        failed=set(),
+        executor=executor,
+        observer=options.observer,
+        semaphore=asyncio.Semaphore(options.limit),
+        publish=asyncio.Lock(),
+        timeout=options.timeout,
+        policy=options.policy,
+        run_id=uuid.uuid4().hex,
+        cancel=options.cancel,
+        queue_size=options.queue_size,
+        on_output=options.on_output,
+        queues=EdgeBuffer(),
+    )
+
+
+def _seed(definition: GraphDefinition, seeds: Mapping[str, Mapping[str, object]]) -> Values:
     values: Values = {}
     provided: set[tuple[str, str]] = set()
     for node_id, ports in seeds.items():
@@ -92,113 +219,109 @@ def _seed(
     return values
 
 
-async def _schedule(
-    definition: GraphDefinition,
-    values: Values,
-    side: Mapping[str, object],
-    outputs: dict[str, Mapping[str, object]],
-    pending: dict[str, Node],
-    executor: Executor,
-    observer: Observer | None,
-    semaphore: asyncio.Semaphore,
-    publish: asyncio.Lock,
-    timeout: float | None,
-    policy: str,
-    run_id: str,
-) -> None:
-    while pending:
-        ready = [node for node in pending.values() if _inputs_ready(node, values)]
+async def _schedule(state: _State) -> None:
+    while state.pending:
+        _ensure_running(state.cancel)
+        if state.policy == "collect":
+            _drop_blocked(state.pending, state.failed, state.definition.edges)
+        if not state.pending:
+            return
+        ready = [
+            node
+            for node in state.pending.values()
+            if _inputs_ready(node, state.values, state.queues)
+        ]
         if not ready:
-            names = ", ".join(sorted(pending))
+            names = ", ".join(sorted(state.pending))
             raise GraphError(f"no ready node; still waiting on {names}")
-        await _launch_all(
-            ready,
-            definition,
-            values,
-            side,
-            outputs,
-            executor,
-            observer,
-            semaphore,
-            publish,
-            timeout,
-            policy,
-            run_id,
-        )
+        await _launch_all(ready, state)
         for node in ready:
-            pending.pop(node.id, None)
+            state.pending.pop(node.id, None)
 
 
-async def _launch_all(
-    ready: list[Node],
-    definition: GraphDefinition,
-    values: Values,
-    side: Mapping[str, object],
-    outputs: dict[str, Mapping[str, object]],
-    executor: Executor,
-    observer: Observer | None,
-    semaphore: asyncio.Semaphore,
-    publish: asyncio.Lock,
-    timeout: float | None,
-    policy: str,
-    run_id: str,
-) -> None:
-    await asyncio.gather(*[
-        _launch(
-            node,
-            definition,
-            values,
-            side,
-            outputs,
-            executor,
-            observer,
-            semaphore,
-            publish,
-            timeout,
-            policy,
-            run_id,
-        )
-        for node in ready
-    ])
+def _ensure_running(cancel: asyncio.Event | None) -> None:
+    if _cancel_requested(cancel):
+        raise asyncio.CancelledError
 
 
-def _inputs_ready(node: Node, values: Values) -> bool:
-    return all((node.id, port.name) in values for port in node.inputs)
+def _cancel_requested(cancel: asyncio.Event | None) -> bool:
+    if cancel is not None and cancel.is_set():
+        return True
+    task = asyncio.current_task()
+    return task is not None and task.cancelling() > 0
 
 
-async def _launch(
-    node: Node,
-    definition: GraphDefinition,
-    values: Values,
-    side: Mapping[str, object],
-    outputs: dict[str, Mapping[str, object]],
-    executor: Executor,
-    observer: Observer | None,
-    semaphore: asyncio.Semaphore,
-    publish: asyncio.Lock,
-    timeout: float | None,
-    policy: str,
-    run_id: str,
-) -> None:
-    inputs = {port.name: values[(node.id, port.name)] for port in node.inputs}
-    _notify_start(observer, definition, node.id, run_id)
-    result = await _execute(
-        node,
-        inputs,
-        side,
-        executor,
-        semaphore,
-        timeout,
-        policy,
-        observer,
-        definition,
-        run_id,
-    )
+def _drop_blocked(pending: dict[str, Node], failed: set[str], edges: tuple[Edge, ...]) -> None:
+    changed = True
+    while changed:
+        changed = False
+        for node_id in list(pending):
+            if _source_failed(node_id, failed, edges):
+                failed.add(node_id)
+                pending.pop(node_id, None)
+                changed = True
+
+
+def _source_failed(node_id: str, failed: set[str], edges: tuple[Edge, ...]) -> bool:
+    return any(edge.target == node_id and edge.source in failed for edge in edges)
+
+
+def _inputs_ready(node: Node, values: Values, queues: EdgeBuffer) -> bool:
+    for port in node.inputs:
+        key = (node.id, port.name)
+        if key not in values and not queues.ready(key):
+            return False
+    return True
+
+
+async def _launch_all(ready: list[Node], state: _State) -> None:
+    try:
+        async with asyncio.TaskGroup() as group:
+            for node in ready:
+                group.create_task(_launch(node, state))
+            if state.cancel is not None:
+                group.create_task(_watch_cancel(state.cancel))
+    except BaseExceptionGroup as group_exc:
+        _raise_from_group(group_exc)
+
+
+async def _watch_cancel(cancel: asyncio.Event) -> None:
+    await cancel.wait()
+    raise asyncio.CancelledError
+
+
+def _raise_from_group(group_exc: BaseExceptionGroup[BaseException]) -> None:
+    errors = [exc for exc in group_exc.exceptions if isinstance(exc, GraphError)]
+    if errors:
+        raise errors[0]
+    cancelled = [exc for exc in group_exc.exceptions if isinstance(exc, asyncio.CancelledError)]
+    if cancelled and len(cancelled) == len(group_exc.exceptions):
+        raise cancelled[0]
+    first = group_exc.exceptions[0]
+    raise first
+
+
+async def _launch(node: Node, state: _State) -> None:
+    inputs = await _take_inputs(node, state)
+    _notify_start(state.observer, state.definition, node.id, state.run_id)
+    result = await _execute(node, inputs, state)
     if result is None:
+        state.failed.add(node.id)
         return
     produced, duration_s = result
-    _notify_success(observer, definition, node.id, run_id, duration_s)
-    await _publish(definition, node, produced, values, outputs, publish)
+    _notify_success(state.observer, state.definition, node.id, state.run_id, duration_s)
+    await _publish(state, node, produced)
+
+
+async def _take_inputs(node: Node, state: _State) -> dict[str, object]:
+    inputs: dict[str, object] = {}
+    for port in node.inputs:
+        key = (node.id, port.name)
+        if state.queues.ready(key):
+            inputs[port.name] = await state.queues.get(key)
+        else:
+            inputs[port.name] = state.values[key]
+    return inputs
 
 
 def _notify_start(
@@ -207,8 +330,9 @@ def _notify_start(
     node_id: str,
     run_id: str,
 ) -> None:
-    if observer is not None:
-        observer.on_start(definition, node_id, run_id=run_id)
+    if observer is None:
+        return
+    _guard_observer(lambda: observer.on_start(definition, node_id, run_id=run_id))
 
 
 def _notify_success(
@@ -218,70 +342,108 @@ def _notify_success(
     run_id: str,
     duration_s: float,
 ) -> None:
-    if observer is not None:
-        observer.on_success(
+    if observer is None:
+        return
+    _guard_observer(
+        lambda: observer.on_success(
             definition,
             node_id,
             run_id=run_id,
             duration_s=duration_s,
         )
+    )
 
 
 async def _execute(
     node: Node,
     inputs: Mapping[str, object],
-    side: Mapping[str, object],
-    executor: Executor,
-    semaphore: asyncio.Semaphore,
-    timeout: float | None,
-    policy: str,
-    observer: Observer | None,
-    definition: GraphDefinition,
-    run_id: str,
+    state: _State,
 ) -> tuple[Mapping[str, object], float] | None:
-    async with semaphore:
+    async with state.semaphore:
         started = time.perf_counter()
         try:
-            produced = await asyncio.wait_for(executor.run(node, inputs, side), timeout)
+            produced = await asyncio.wait_for(
+                state.executor.run(node, inputs, state.side),
+                state.timeout,
+            )
         except Exception as exc:
-            _notify_exception(observer, definition, node.id, run_id, started, exc)
-            if policy == "fail":
+            _notify_exception(state, node.id, started, exc)
+            if state.policy == "fail":
                 name = type(exc).__name__
                 raise GraphError(f"node {node.id} failed: {name}") from exc
             return None
         return produced, time.perf_counter() - started
 
 
-def _notify_exception(
-    observer: Observer | None,
-    definition: GraphDefinition,
-    node_id: str,
-    run_id: str,
-    started: float,
-    exc: Exception,
-) -> None:
+def _notify_exception(state: _State, node_id: str, started: float, exc: Exception) -> None:
+    observer = state.observer
     if observer is None:
         return
-    observer.on_exception(
-        definition,
-        node_id,
-        type(exc).__name__,
-        run_id=run_id,
-        duration_s=time.perf_counter() - started,
+    duration_s = time.perf_counter() - started
+    name = type(exc).__name__
+    _guard_observer(
+        lambda: observer.on_exception(
+            state.definition,
+            node_id,
+            name,
+            run_id=state.run_id,
+            duration_s=duration_s,
+        )
     )
 
 
-async def _publish(
-    definition: GraphDefinition,
-    node: Node,
-    produced: Mapping[str, object],
-    values: Values,
-    outputs: dict[str, Mapping[str, object]],
-    publish: asyncio.Lock,
-) -> None:
-    async with publish:
-        for edge in definition.edges:
+def _guard_observer(callback: Callable[[], None]) -> None:
+    try:
+        callback()
+    except Exception:
+        _log_observer_failure()
+
+
+def _logger() -> logging.Logger:
+    return logging.getLogger("nodeio")
+
+
+def _log_observer_failure() -> None:
+    try:
+        logger = _logger()
+    except Exception:
+        return
+    try:
+        logger.exception("observer failed")
+    except Exception:
+        return
+
+
+async def _publish(state: _State, node: Node, produced: Mapping[str, object]) -> None:
+    deliveries: list[tuple[Edge, object]] = []
+    async with state.publish:
+        for edge in state.definition.edges:
             if edge.source == node.id and edge.source_port in produced:
-                target = (edge.target, edge.target_port)
-                values[target] = produced[edge.source_port]
-        outputs[node.id] = dict(produced)
+                deliveries.append((edge, produced[edge.source_port]))
+        state.outputs[node.id] = dict(produced)
+    for edge, value in deliveries:
+        await state.queues.put(
+            (edge.target, edge.target_port),
+            value,
+            _bound(edge, state.queue_size),
+        )
+    await _emit_outputs(state.on_output, node.id, produced)
+
+
+def _bound(edge: Edge, queue_size: int | None) -> int | None:
+    if edge.queue_size is not None:
+        return edge.queue_size
+    return queue_size
+
+
+async def _emit_outputs(
+    callback: OutputCallback | None,
+    node_id: str,
+    produced: Mapping[str, object],
+) -> None:
+    if callback is None:
+        return
+    for port, value in produced.items():
+        result = callback(node_id, port, value)
+        if isinstance(result, Awaitable):
+            await result
