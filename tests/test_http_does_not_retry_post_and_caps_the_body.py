@@ -46,8 +46,12 @@ def test_grpc_requires_a_deadline_and_a_secure_call() -> None:
     """Run this step."""
     with pytest.raises(GraphError, match="deadline"):
         grpc_node("g", method="pkg.Service/Run", deadline=0)
-    with pytest.raises(GraphError, match="insecure"):
-        grpc_node("g", method="pkg.Service/Run", deadline=1, insecure=True)
+    insecure = grpc_node("g", method="pkg.Service/Run", deadline=1, allow_insecure=True)
+    insecure_graph = load((insecure,), (), entries=(("g", "request"),))
+    with pytest.raises(GraphError, match="node g failed") as insecure_run:
+        asyncio.run(run(insecure_graph, {"g": {"request": {}}}))
+    assert isinstance(insecure_run.value.__cause__, GraphError)
+    assert "grpc extra" in str(insecure_run.value.__cause__)
 
     async def unary(method: str, request: object, deadline: float) -> dict[str, object]:
         """Run this step."""

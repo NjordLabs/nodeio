@@ -14,6 +14,24 @@ from nodeio import (
 )
 
 
+class _Stream:
+    """Async context manager yielding one empty response."""
+
+    async def __aenter__(self) -> SimpleNamespace:
+        """Run this step."""
+        return SimpleNamespace(status_code=204, aiter_bytes=_empty)
+
+    async def __aexit__(self, *args: object) -> bool:
+        """Run this step."""
+        return False
+
+
+async def _empty() -> object:
+    """Yield no body bytes."""
+    if False:
+        yield b""
+
+
 def test_owned_client_receives_tls_material(monkeypatch: pytest.MonkeyPatch) -> None:
     """Run this step."""
 
@@ -28,10 +46,10 @@ def test_owned_client_receives_tls_material(monkeypatch: pytest.MonkeyPatch) -> 
             """Run this step."""
             return False
 
-        async def request(self, method: str, url: str) -> SimpleNamespace:
+        def stream(self, method: str, url: str) -> _Stream:
             """Run this step."""
             del method, url
-            return SimpleNamespace(status_code=204, content=b"")
+            return _Stream()
 
     seen: dict[str, object] = {}
 
@@ -45,5 +63,7 @@ def test_owned_client_receives_tls_material(monkeypatch: pytest.MonkeyPatch) -> 
     graph = load((plain,), (), entries=(("h", "method"), ("h", "url")))
     status = asyncio.run(run(graph, {"h": {"method": "GET", "url": "https://example.test"}}))
     assert status["h"]["status"] == 204
+    assert status["h"]["body"] == b""
     assert seen["verify"] == "/ca.pem"
     assert seen["cert"] == ("cert.pem", "key.pem")
+    assert seen["follow_redirects"] is False
