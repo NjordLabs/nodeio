@@ -30,6 +30,6 @@ PyPI publish stays open. nodeio-serve `v0.1.0` is the ingress adapter.
 
 - feat(engine): replace the loader with a ready-queue run
 - fix(quality): split tests, drop Any expressions, and replace random jitter
-- docs(readme): install from the v0.2.0 git tag
+- docs(readme): install the v0.2.0 release wheel
 
 *Last updated: 2026-11-22.*
