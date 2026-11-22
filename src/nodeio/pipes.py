@@ -7,17 +7,40 @@ transport. Only idempotent HTTP methods are retried. Bodies are not logged.
 from __future__ import annotations
 
 import asyncio
-import random
+import secrets
 from collections.abc import Awaitable, Callable, Mapping
+from typing import Protocol, cast
 from urllib.parse import urlparse
 
-from mimirlog import get_logger
-
+from nodeio.boundary import http_exchange, named_logger
 from nodeio.errors import GraphError
 from nodeio.graph import Node, Port
 
 _IDEMPOTENT = frozenset({"DELETE", "GET", "HEAD", "PUT"})
 Unary = Callable[[str, object, float], Awaitable[object]]
+
+
+class _Response(Protocol):
+    """Status and body of one HTTP response."""
+
+    status_code: int
+    content: bytes
+
+
+class _Client(Protocol):
+    """Object that can perform one HTTP request."""
+
+    async def request(self, method: str, url: str, timeout: float) -> _Response:
+        """Send ``method`` to ``url`` and return the response.
+
+        Raises:
+            NotImplementedError: Callers use a concrete client.
+        """
+        raise NotImplementedError
+
+
+def _as_client(client: object) -> _Client:
+    return cast(_Client, client)
 
 
 def http_node(
@@ -58,8 +81,18 @@ def http_node(
     if timeout <= 0:
         raise GraphError("timeout must be positive")
 
-    async def runner(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
-        del side
+    async def runner(
+        inputs: Mapping[str, object], side: Mapping[str, object]
+    ) -> dict[str, object]:
+        """Perform the HTTP request described by the node inputs.
+
+        Returns:
+            The status mapping.
+
+        Raises:
+            GraphError: The URL, the body, or the status is rejected.
+        """
+        _ = side
         method = str(inputs["method"]).upper()
         url = str(inputs["url"])
         _check_url(url, allow_insecure=allow_insecure, allow_hosts=allow_hosts)
@@ -67,7 +100,8 @@ def http_node(
         last: dict[str, object] = {"status": 0}
         for attempt in range(attempts):
             if attempt and backoff > 0:
-                delay = backoff * (2 ** (attempt - 1)) * random.uniform(0.5, 1.0)
+                scale = 1 << (attempt - 1)
+                delay = backoff * scale * _jitter()
                 await asyncio.sleep(delay)
             last = await _once(client, method, url, timeout, max_bytes, verify, cert)
             status = last["status"]
@@ -97,9 +131,18 @@ def _check_url(url: str, *, allow_insecure: bool, allow_hosts: tuple[str, ...]) 
         raise GraphError(f"host {parsed.hostname} is not allowed")
 
 
+def _jitter() -> float:
+    """Return a delay scale between one half and one.
+
+    Returns:
+        A factor in the closed range from 0.5 to 1.0.
+    """
+    return 0.5 + (secrets.randbelow(501) / 1000)
+
+
 def _log_http(method: str, url: str, status: object, attempt: int) -> None:
     host = urlparse(url).hostname or ""
-    get_logger("nodeio.http").info({
+    named_logger("nodeio.http").info({
         "attempt": attempt,
         "event": "http",
         "host": host,
@@ -118,14 +161,9 @@ async def _once(
     cert: tuple[str, str] | None,
 ) -> dict[str, object]:
     if client is None:
-        import httpx
-
-        async with httpx.AsyncClient(timeout=timeout, verify=verify, cert=cert) as owned:
-            response = await owned.request(method, url)
-            body = response.content
-            status = response.status_code
+        status, body = await http_exchange(method, url, timeout, verify, cert)
     else:
-        response = await client.request(method, url, timeout=timeout)  # type: ignore[attr-defined]
+        response = await _as_client(client).request(method, url, timeout=timeout)
         body = response.content
         status = response.status_code
     if len(body) > max_bytes:
@@ -148,7 +186,7 @@ def grpc_node(
         method: Full method path, for example ``pkg.Service/Run``.
         deadline: Positive deadline in seconds.
         insecure: Permit an insecure channel when true.
-        call: Injected unary call. The default builds a TLS channel.
+        call: Injected unary call. Without one, the node raises when it runs.
 
     Returns:
         A node. Input is ``request``. Output is ``response``.
@@ -163,8 +201,18 @@ def grpc_node(
     if insecure and call is None:
         raise GraphError("insecure gRPC requires an explicit channel")
 
-    async def runner(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
-        del side
+    async def runner(
+        inputs: Mapping[str, object], side: Mapping[str, object]
+    ) -> dict[str, object]:
+        """Perform the unary call described by the node inputs.
+
+        Returns:
+            The response mapping.
+
+        Raises:
+            GraphError: No unary call was injected.
+        """
+        _ = side
         if call is None:
             raise GraphError("grpc extra is not installed")
         response = await call(method, inputs["request"], deadline)

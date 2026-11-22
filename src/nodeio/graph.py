@@ -153,7 +153,9 @@ def _port(node: Node, name: str, outputs: bool) -> Port:
 def _check_edges(by_id: dict[str, Node], edges: tuple[Edge, ...]) -> None:
     for edge in edges:
         if edge.source not in by_id or edge.target not in by_id:
-            raise GraphError(f"edge names an unknown node {edge.source} -> {edge.target}")
+            raise GraphError(
+                f"edge names an unknown node {edge.source} -> {edge.target}"
+            )
         source = _port(by_id[edge.source], edge.source_port, outputs=True)
         target = _port(by_id[edge.target], edge.target_port, outputs=False)
         if source.annotation != target.annotation:
@@ -188,19 +190,27 @@ def _check_cycle(nodes: tuple[Node, ...], edges: tuple[Edge, ...]) -> None:
     for edge in edges:
         indegree[edge.target] += 1
         adjacent[edge.source].append(edge.target)
+    if _drain(indegree, adjacent) != len(nodes):
+        remaining = {node_id for node_id, count in indegree.items() if count > 0}
+        cycle = tuple(_name_cycle(adjacent, remaining))
+        raise GraphError("cycle in graph", cycle=cycle)
+
+
+def _drain(indegree: dict[str, int], adjacent: dict[str, list[str]]) -> int:
     ready = [node_id for node_id, count in indegree.items() if count == 0]
     seen = 0
     while ready:
         current = ready.pop()
         seen += 1
-        for nxt in adjacent[current]:
-            indegree[nxt] -= 1
-            if indegree[nxt] == 0:
-                ready.append(nxt)
-    if seen != len(nodes):
-        remaining = {node_id for node_id, count in indegree.items() if count > 0}
-        cycle = tuple(_name_cycle(adjacent, remaining))
-        raise GraphError("cycle in graph", cycle=cycle)
+        _release(adjacent[current], indegree, ready)
+    return seen
+
+
+def _release(targets: list[str], indegree: dict[str, int], ready: list[str]) -> None:
+    for nxt in targets:
+        indegree[nxt] -= 1
+        if indegree[nxt] == 0:
+            ready.append(nxt)
 
 
 def _name_cycle(adjacent: dict[str, list[str]], remaining: set[str]) -> list[str]:

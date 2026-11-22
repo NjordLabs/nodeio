@@ -57,30 +57,20 @@ async def run(
     semaphore = asyncio.Semaphore(limit)
     publish = asyncio.Lock()
     run_id = uuid.uuid4().hex
-    while pending:
-        ready = [node for node in pending.values() if _inputs_ready(node, values)]
-        if not ready:
-            names = ", ".join(sorted(pending))
-            raise GraphError(f"no ready node; still waiting on {names}")
-        await asyncio.gather(*[
-            _launch(
-                node,
-                definition,
-                values,
-                side,
-                outputs,
-                chosen,
-                observer,
-                semaphore,
-                publish,
-                timeout,
-                policy,
-                run_id,
-            )
-            for node in ready
-        ])
-        for node in ready:
-            pending.pop(node.id, None)
+    await _schedule(
+        definition,
+        values,
+        side,
+        outputs,
+        pending,
+        chosen,
+        observer,
+        semaphore,
+        publish,
+        timeout,
+        policy,
+        run_id,
+    )
     return outputs
 
 
@@ -95,11 +85,83 @@ def _seed(
             values[(node_id, port)] = value
             provided.add((node_id, port))
     missing = [
-        f"{node}.{port}" for node, port in definition.entries if (node, port) not in provided
+        f"{node}.{port}"
+        for node, port in definition.entries
+        if (node, port) not in provided
     ]
     if missing:
         raise GraphError("missing inputs " + ", ".join(missing))
     return values
+
+
+async def _schedule(
+    definition: GraphDefinition,
+    values: Values,
+    side: Mapping[str, object],
+    outputs: dict[str, Mapping[str, object]],
+    pending: dict[str, Node],
+    executor: Executor,
+    observer: Observer | None,
+    semaphore: asyncio.Semaphore,
+    publish: asyncio.Lock,
+    timeout: float | None,
+    policy: str,
+    run_id: str,
+) -> None:
+    while pending:
+        ready = [node for node in pending.values() if _inputs_ready(node, values)]
+        if not ready:
+            names = ", ".join(sorted(pending))
+            raise GraphError(f"no ready node; still waiting on {names}")
+        await _launch_all(
+            ready,
+            definition,
+            values,
+            side,
+            outputs,
+            executor,
+            observer,
+            semaphore,
+            publish,
+            timeout,
+            policy,
+            run_id,
+        )
+        for node in ready:
+            pending.pop(node.id, None)
+
+
+async def _launch_all(
+    ready: list[Node],
+    definition: GraphDefinition,
+    values: Values,
+    side: Mapping[str, object],
+    outputs: dict[str, Mapping[str, object]],
+    executor: Executor,
+    observer: Observer | None,
+    semaphore: asyncio.Semaphore,
+    publish: asyncio.Lock,
+    timeout: float | None,
+    policy: str,
+    run_id: str,
+) -> None:
+    await asyncio.gather(*[
+        _launch(
+            node,
+            definition,
+            values,
+            side,
+            outputs,
+            executor,
+            observer,
+            semaphore,
+            publish,
+            timeout,
+            policy,
+            run_id,
+        )
+        for node in ready
+    ])
 
 
 def _inputs_ready(node: Node, values: Values) -> bool:
@@ -121,30 +183,107 @@ async def _launch(
     run_id: str,
 ) -> None:
     inputs = {port.name: values[(node.id, port.name)] for port in node.inputs}
+    _notify_start(observer, definition, node.id, run_id)
+    result = await _execute(
+        node,
+        inputs,
+        side,
+        executor,
+        semaphore,
+        timeout,
+        policy,
+        observer,
+        definition,
+        run_id,
+    )
+    if result is None:
+        return
+    produced, duration_s = result
+    _notify_success(observer, definition, node.id, run_id, duration_s)
+    await _publish(definition, node, produced, values, outputs, publish)
+
+
+def _notify_start(
+    observer: Observer | None,
+    definition: GraphDefinition,
+    node_id: str,
+    run_id: str,
+) -> None:
     if observer is not None:
-        observer.on_start(definition, node.id, run_id=run_id)
+        observer.on_start(definition, node_id, run_id=run_id)
+
+
+def _notify_success(
+    observer: Observer | None,
+    definition: GraphDefinition,
+    node_id: str,
+    run_id: str,
+    duration_s: float,
+) -> None:
+    if observer is not None:
+        observer.on_success(
+            definition,
+            node_id,
+            run_id=run_id,
+            duration_s=duration_s,
+        )
+
+
+async def _execute(
+    node: Node,
+    inputs: Mapping[str, object],
+    side: Mapping[str, object],
+    executor: Executor,
+    semaphore: asyncio.Semaphore,
+    timeout: float | None,
+    policy: str,
+    observer: Observer | None,
+    definition: GraphDefinition,
+    run_id: str,
+) -> tuple[Mapping[str, object], float] | None:
     async with semaphore:
         started = time.perf_counter()
         try:
-            result = await asyncio.wait_for(executor.run(node, inputs, side), timeout)
+            produced = await asyncio.wait_for(executor.run(node, inputs, side), timeout)
         except Exception as exc:
-            duration_s = time.perf_counter() - started
-            if observer is not None:
-                observer.on_exception(
-                    definition,
-                    node.id,
-                    type(exc).__name__,
-                    run_id=run_id,
-                    duration_s=duration_s,
-                )
+            _notify_exception(observer, definition, node.id, run_id, started, exc)
             if policy == "fail":
-                raise GraphError(f"node {node.id} failed: {type(exc).__name__}") from exc
-            return
-        duration_s = time.perf_counter() - started
-    if observer is not None:
-        observer.on_success(definition, node.id, run_id=run_id, duration_s=duration_s)
+                name = type(exc).__name__
+                raise GraphError(f"node {node.id} failed: {name}") from exc
+            return None
+        return produced, time.perf_counter() - started
+
+
+def _notify_exception(
+    observer: Observer | None,
+    definition: GraphDefinition,
+    node_id: str,
+    run_id: str,
+    started: float,
+    exc: Exception,
+) -> None:
+    if observer is None:
+        return
+    observer.on_exception(
+        definition,
+        node_id,
+        type(exc).__name__,
+        run_id=run_id,
+        duration_s=time.perf_counter() - started,
+    )
+
+
+async def _publish(
+    definition: GraphDefinition,
+    node: Node,
+    produced: Mapping[str, object],
+    values: Values,
+    outputs: dict[str, Mapping[str, object]],
+    publish: asyncio.Lock,
+) -> None:
     async with publish:
         for edge in definition.edges:
-            if edge.source == node.id and edge.source_port in result:
-                values[(edge.target, edge.target_port)] = result[edge.source_port]
-        outputs[node.id] = dict(result)
+            if edge.source == node.id and edge.source_port in produced:
+                target = (edge.target, edge.target_port)
+                values[target] = produced[edge.source_port]
+        outputs[node.id] = dict(produced)

@@ -32,5 +32,6 @@ in a separate repository.
 ## Recent history
 
 - feat(engine): replace the loader with a ready-queue run
+- fix(quality): split tests, drop Any expressions, and replace random jitter
 
 *Last updated: 2026-11-22.*

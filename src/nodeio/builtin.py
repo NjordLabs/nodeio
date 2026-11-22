@@ -51,8 +51,15 @@ def gate(node_id: str) -> Node:
         A node with boolean ``open``, value ``value``, and output ``value``.
     """
 
-    async def runner(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
-        del side
+    async def runner(
+        inputs: Mapping[str, object], side: Mapping[str, object]
+    ) -> dict[str, object]:
+        """Forward the value when the gate is open.
+
+        Returns:
+            The output mapping.
+        """
+        _ = side
         if inputs["open"]:
             return {"value": inputs["value"]}
         return {"value": None}
@@ -76,8 +83,15 @@ def mux(node_id: str) -> Node:
         A node whose output ``value`` is one of the two inputs.
     """
 
-    async def runner(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
-        del side
+    async def runner(
+        inputs: Mapping[str, object], side: Mapping[str, object]
+    ) -> dict[str, object]:
+        """Select the left or right input.
+
+        Returns:
+            The output mapping.
+        """
+        _ = side
         chosen = "left" if inputs["select"] == "left" else "right"
         return {"value": inputs[chosen]}
 
@@ -100,8 +114,15 @@ def demux(node_id: str) -> Node:
         A node with outputs ``left`` and ``right``. The other output is ``None``.
     """
 
-    async def runner(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
-        del side
+    async def runner(
+        inputs: Mapping[str, object], side: Mapping[str, object]
+    ) -> dict[str, object]:
+        """Route the value to the named output.
+
+        Returns:
+            The output mapping.
+        """
+        _ = side
         value = inputs["value"]
         if inputs["key"] == "left":
             return {"left": value, "right": None}
@@ -130,8 +151,15 @@ def subgraph_node(node_id: str, name: str) -> Node:
         A node that runs the child graph.
     """
 
-    async def runner(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
-        del side
+    async def runner(
+        inputs: Mapping[str, object], side: Mapping[str, object]
+    ) -> dict[str, object]:
+        """Run the registered child graph once.
+
+        Returns:
+            The child output.
+        """
+        _ = side
         from nodeio.run import run
 
         child = subgraph(name)

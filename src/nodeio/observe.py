@@ -2,63 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+import logging
 
-from mimirlog import get_logger
-
+from nodeio.boundary import Observer, named_logger
 from nodeio.graph import GraphDefinition
 
 
-class Observer(Protocol):
-    """Notifications for one node attempt."""
-
-    def on_start(self, definition: GraphDefinition, node_id: str, *, run_id: str) -> None:
-        """A node is about to run.
-
-        Args:
-            definition: Graph being run.
-            node_id: Node that is starting.
-            run_id: Id of this run. Shared by every node in the run.
-        """
-
-    def on_success(
-        self,
-        definition: GraphDefinition,
-        node_id: str,
-        *,
-        run_id: str,
-        duration_s: float,
-    ) -> None:
-        """A node returned outputs.
-
-        Args:
-            definition: Graph being run.
-            node_id: Node that finished.
-            run_id: Id of this run.
-            duration_s: Seconds the node spent inside the executor.
-        """
-
-    def on_exception(
-        self,
-        definition: GraphDefinition,
-        node_id: str,
-        exception: str,
-        *,
-        run_id: str,
-        duration_s: float,
-    ) -> None:
-        """A node raised.
-
-        Args:
-            definition: Graph being run.
-            node_id: Node that failed.
-            exception: Exception type name. The message is omitted.
-            run_id: Id of this run.
-            duration_s: Seconds the node spent inside the executor.
-        """
-
-
-class LoggingObserver:
+class LoggingObserver(Observer):
     """Write one mimirlog event per notification.
 
     The event carries the node id and the outcome. It does not carry
@@ -72,9 +22,11 @@ class LoggingObserver:
             graph: Name included in the structured event.
         """
         self._graph = graph
-        self._logger = get_logger("nodeio")
+        self._logger: logging.Logger = named_logger("nodeio")
 
-    def on_start(self, definition: GraphDefinition, node_id: str, *, run_id: str) -> None:
+    def on_start(
+        self, definition: GraphDefinition, node_id: str, *, run_id: str
+    ) -> None:
         """Log that ``node_id`` is starting.
 
         Args:
@@ -82,7 +34,7 @@ class LoggingObserver:
             node_id: Node that is starting.
             run_id: Id of this run.
         """
-        del definition
+        _ = definition
         self._logger.info({
             "event": "start",
             "graph": self._graph,
@@ -106,7 +58,7 @@ class LoggingObserver:
             run_id: Id of this run.
             duration_s: Seconds the node spent inside the executor.
         """
-        del definition
+        _ = definition
         self._logger.info({
             "duration_s": duration_s,
             "event": "success",
@@ -133,7 +85,7 @@ class LoggingObserver:
             run_id: Id of this run.
             duration_s: Seconds the node spent inside the executor.
         """
-        del definition
+        _ = definition
         self._logger.info({
             "duration_s": duration_s,
             "event": "exception",

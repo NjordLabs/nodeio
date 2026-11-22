@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 
-def double(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+def double(
+    inputs: Mapping[str, object], side: Mapping[str, object]
+) -> dict[str, object]:
     """Return twice the numeric ``value`` input.
 
     Args:
