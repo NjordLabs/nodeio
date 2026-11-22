@@ -1,62 +1,133 @@
 [build-system]
-requires      = ["setuptools>=61.0", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
+requires = ["setuptools>=82.0.1", "wheel>=0.47.0"]
 
 [project]
-name     = "nodeio"
-authors  = [
-  { name = "Nuno Monteiro", email = "pirlruc@gmail.com" },
+name = "nodeio"
+version = "0.2.0"
+dependencies = [
+  "mimirlog @ git+https://github.com/NjordLabs/mimirlog.git@1b98669f8334811bd671c238a68cf23094bb2262",
+  "pydantic>=2.0",
+  "pymjolnir @ git+https://github.com/NjordLabs/pymjolnir.git@aa9a2ee85fafd2102bfdb0a5b3bb97d194715d20",
 ]
-description = "Node engine"
-readme      = "README.md"
-requires-python = ">=3.9"
-keywords    = ["node engine", "factory pattern"]
+requires-python = ">=3.13"
+authors = [{name = "pirlruc"}]
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
 ]
-dynamic = ["version","dependencies"]
+description = "Async graph engine for Python services"
+keywords = ["graph", "pipeline", "python"]
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+
+[project.optional-dependencies]
+dev = [
+  "bandit[toml]==1.9.4",
+  "commitizen>=3.0",
+  "coverage[toml]>=7.13.5",
+  "httpx>=0.28",
+  "interrogate>=1.7.0",
+  "mypy>=1.20.2",
+  "pre-commit==4.6.0",
+  "pylint>=3.0",
+  "pytest>=8.0",
+  "ruff==0.15.12",
+]
+grpc = ["grpcio>=1.70"]
+http = ["httpx>=0.28"]
 
 [project.urls]
-"Homepage"    = "https://github.com/pirlruc/nodeio"
-"Bug Tracker" = "https://github.com/pirlruc/nodeio/issues"
+Changelog = "https://github.com/NjordLabs/nodeio/blob/main/CHANGELOG.md"
+Issues = "https://github.com/NjordLabs/nodeio/issues"
+Repository = "https://github.com/NjordLabs/nodeio"
 
-[tool.setuptools.packages.find]
-where      = ["."]
-exclude    = ["tests","docs"]
-namespaces = false
+[tool.bandit]
+exclude_dirs = [".venv", "build", "dist", "tests"]
 
-[tool.setuptools_scm]
-write_to = "nodeio/__init__.py"
-fallback_version = "0.0.0"
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "v$version"
+update_changelog_on_bump = true
+version_provider = "pep621"
 
-[tool.setuptools.dynamic]
-version = {attr = "nodeio.__version__"}
-dependencies = {file = ["requirements.txt"]}
+[tool.coverage.run]
+branch = true
+source = ["nodeio"]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+
+[tool.interrogate]
+fail-under = 95
+ignore-nested-functions = true
+
+[tool.mypy]
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+explicit_package_bases = true
+mypy_path = ["src"]
+namespace_packages = true
+no_implicit_optional = true
+plugins = ["pydantic.mypy"]
+python_version = "3.13"
+show_error_codes = true
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+disallow_untyped_defs = false
+module = "tests.*"
+
+[tool.pydantic-mypy]
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint.main]
+ignore = [".venv", "build", "dist"]
+py-version = "3.13"
+source-roots = ["src"]
+
+[tool.pylint.messages_control]
+disable = [
+  "broad-exception-caught",
+  "import-outside-toplevel",
+  "too-few-public-methods",
+  "too-many-arguments",
+  "too-many-locals",
+  "too-many-positional-arguments",
+  "unnecessary-ellipsis",
+]
 
 [tool.ruff]
 line-length = 100
-indent-width = 4
+preview = true
+target-version = "py313"
 
-exclude = [
-    "nodeio/__init__.py"
-]
+[tool.ruff.format]
+docstring-code-format = true
 
 [tool.ruff.lint]
-extend-select = [
-    "E",   # pycodestyle
-    "F",   # pyflakes
-    "UP",  # pyupgrade
-    "R",   # refactor
-    ]
-fixable = ["ALL"]
+select = ["B", "C4", "D", "DOC", "E", "F", "I", "SIM", "UP", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
-[tool.ruff.format]
-quote-style = "single"
-indent-style = "space"
-line-ending = "auto"
-docstring-code-format = true
+[tool.setuptools.package-data]
+nodeio = ["py.typed"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
