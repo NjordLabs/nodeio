@@ -44,6 +44,9 @@ def test_ready_queue_runs_downstream() -> None:
     assert "a --> b" in definition.to_mermaid()
     outputs = asyncio.run(run(definition, {"a": {"value": 1}}))
     assert outputs["b"]["value"] == 3
+    rejected = load((source,), (), entries=(("a", "value"),))
+    with pytest.raises(GraphError, match="node a failed"):
+        asyncio.run(run(rejected, {"a": {"value": "x"}}))
 
 
 def test_missing_seed() -> None:

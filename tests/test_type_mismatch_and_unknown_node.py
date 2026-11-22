@@ -68,3 +68,6 @@ def test_factory_mixes_kinds() -> None:
     )
     outputs = asyncio.run(run(definition, {}))
     assert outputs["n"]["value"] == 6
+    lone = load((built,), (), entries=(("n", "value"),))
+    with pytest.raises(GraphError, match="node n failed"):
+        asyncio.run(run(lone, {"n": {"value": "x"}}))

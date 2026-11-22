@@ -11,6 +11,7 @@ from nodeio import (
     Port,
     load,
 )
+from nodeio.graph import _name_cycle
 
 
 def test_cycle_is_named() -> None:
@@ -25,6 +26,13 @@ def test_cycle_is_named() -> None:
         load((left, right), edges)
     assert caught.value.cycle[0] == caught.value.cycle[-1]
     assert "a" in caught.value.cycle and "b" in caught.value.cycle
+
+
+def test_cycle_name_skips_edges_outside_the_cycle() -> None:
+    """Name a cycle when the first walk leaves the remaining set."""
+    named = _name_cycle({"a": ["b", "a"], "b": ["c"]}, {"a", "b"})
+    assert named[0] == named[-1]
+    assert _name_cycle({"a": ["c"]}, {"a"}) == ["a"]
 
 
 def test_definitions_do_not_share_side_packets() -> None:

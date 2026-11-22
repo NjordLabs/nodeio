@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Mapping
 
+import pytest
+
 from nodeio import (
     Node,
     Port,
@@ -44,6 +46,13 @@ def test_thread_and_process_executors() -> None:
     outputs = asyncio.run(run(definition, {"t": {"value": "ok"}, "p": {"value": 4}}))
     assert outputs["t"]["value"] == "ok"
     assert outputs["p"]["value"] == 8
+
+
+def test_double_rejects_a_non_int() -> None:
+    """Run this step."""
+    assert double({"value": 3}, {})["value"] == 6
+    with pytest.raises(TypeError):
+        double({"value": "x"}, {})
 
 
 def test_shared_memory_roundtrip() -> None:
