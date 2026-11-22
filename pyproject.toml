@@ -117,7 +117,7 @@ disable = [
 pythonpath = ["."]
 
 [tool.ruff]
-line-length = 88
+line-length = 100
 preview = true
 target-version = "py313"
 
