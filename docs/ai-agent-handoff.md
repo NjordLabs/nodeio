@@ -3,9 +3,10 @@
 ## Identity
 
 `nodeio` is an async graph engine. Python 3.13 and 3.14. Public
-repository `NjordLabs/nodeio`. `0.3.0` is authored on
-`feature-nodeio-review` and is not tagged or published. `v0.2.0` remains
-the GitHub Release.
+repository `NjordLabs/nodeio`. [`v0.3.0`](https://github.com/NjordLabs/nodeio/releases/tag/v0.3.0)
+is the GitHub Release.
+The wheel sha256 is
+`b8d05cd111165e9e7ed01ce49af15917e5b5c17be3298a624f4ddb6c7b8038b9`.
 
 ## Scope
 
@@ -50,8 +51,8 @@ first step of the host script.
 
 ## Suggested next work
 
-Publish `0.3.0` to PyPI (`ENG-001-T2`). Do not tag until that publish
-is requested. `WORK-001` and `STREAM-001` stay open.
+Publish `0.3.0` to PyPI (`ENG-001-T2`). `WORK-001` and `STREAM-001`
+stay open.
 
 ## Recent history
 
@@ -64,5 +65,7 @@ is requested. `WORK-001` and `STREAM-001` stay open.
 - feat(otel): span each node from an optional extra
 - docs(release): record 0.3.0 without publishing
 - fix(quality): bring complexity and docstring gates back under the limits
+- build(deps): pin mimirlog 0.2.0 and pymjolnir 0.1.1 release wheels
+- release: tag v0.3.0
 
 *Last updated: 2026-11-22.*
