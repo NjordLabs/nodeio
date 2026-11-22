@@ -27,7 +27,7 @@ milestones:
           - PY-CONC-001
         tasks:
           - id: ENG-001-T1
-            status: open
+            status: done
             title: Implement the definition, scheduler, and executors
             instructions:
               files:
@@ -106,7 +106,7 @@ milestones:
         guardrail_refs:
           - PY-CONC-001
       - id: LIFE-001
-        status: open
+        status: done
         title: Give nodes an open, process, and close lifecycle
         overview:
           problem: >-
@@ -117,14 +117,14 @@ milestones:
             request-shaped scheduler.
         decision: >-
           In the context of a request-shaped graph, facing nodes that
-          hold resources, we decided to record a lifecycle as follow-up
-          work, to achieve a releasable runner now, accepting that
-          resources are opened inside the runner.
+          hold resources, we decided to call open once before the first
+          process and close in a finally, to achieve cleanup when process
+          fails, accepting that a plain callable stays a runner.
         guardrail_refs:
           - PY-CONC-001
         tasks:
           - id: LIFE-001-T1
-            status: open
+            status: done
             title: Call open and close around a node's process method
             instructions:
               files:
@@ -135,7 +135,7 @@ milestones:
             guardrail_refs:
               - PY-TEST-002
       - id: FLOW-001
-        status: open
+        status: done
         title: Bound queues between nodes
         overview:
           problem: >-
@@ -145,14 +145,14 @@ milestones:
             A producer blocks when a downstream queue is full.
         decision: >-
           In the context of a request-shaped graph, facing unbounded
-          edges, we decided to leave flow control for a later change,
-          to achieve a small scheduler now, accepting that a fast
-          producer can hold an entire request in memory.
+          edges, we decided to wait the producer when a per-edge or
+          graph-level bound is full, to achieve backpressure, accepting
+          that the default bound stays unlimited.
         guardrail_refs:
           - PY-CONC-001
         tasks:
           - id: FLOW-001-T1
-            status: open
+            status: done
             title: Add a bounded queue and backpressure on edges
             instructions:
               files:
@@ -162,7 +162,7 @@ milestones:
             guardrail_refs:
               - PY-TEST-002
       - id: GRPC-001
-        status: open
+        status: done
         title: Call gRPC through a real channel
         overview:
           problem: >-
@@ -173,14 +173,15 @@ milestones:
             deadline.
         decision: >-
           In the context of a client node, facing a missing channel,
-          we decided to keep the injected call and record the channel
-          as follow-up, to achieve a releasable pipe now, accepting
-          that callers must pass the call.
+          we decided to open a grpc.aio channel from target when the
+          extra is installed, to achieve a deadline and optional mutual
+          TLS, accepting that an insecure channel requires
+          allow_insecure.
         guardrail_refs:
           - PY-TEST-002
         tasks:
           - id: GRPC-001-T1
-            status: open
+            status: done
             title: Open a TLS grpcio.aio channel from the grpc extra
             instructions:
               files:
@@ -191,7 +192,7 @@ milestones:
             guardrail_refs:
               - PY-TEST-002
       - id: OTEL-001
-        status: open
+        status: done
         title: Export node spans from an optional extra
         overview:
           problem: >-
@@ -202,14 +203,15 @@ milestones:
             dependency.
         decision: >-
           In the context of a graph run, facing a request for traces,
-          we decided to keep the logging observer and record an
-          OpenTelemetry extra as follow-up, to achieve a release
-          without the SDK, accepting that traces are not exported yet.
+          we decided to start a span per node when the optional extra
+          is installed and to no-op otherwise, to achieve traces
+          without a required dependency, accepting that the SDK is
+          not bundled.
         guardrail_refs:
           - PY-TEST-002
         tasks:
           - id: OTEL-001-T1
-            status: open
+            status: done
             title: Add an OpenTelemetry observer extra
             instructions:
               files:
@@ -220,7 +222,7 @@ milestones:
             guardrail_refs:
               - PY-TEST-002
       - id: HOST-001
-        status: open
+        status: done
         title: Cover Python 3.14 and the container CI script
         overview:
           problem: >-
@@ -231,14 +233,15 @@ milestones:
             run the remaining tools in Docker.
         decision: >-
           In the context of the first release, facing a single
-          interpreter, we decided to ship 3.13 and record the rest,
-          to achieve a green release now, accepting that 3.14 and the
-          repo-level container script are follow-up work.
+          interpreter, we decided to test Python 3.13 and 3.14 and to
+          add a repo-level container script, to achieve a wider matrix,
+          accepting that the container image stays private and the host
+          script remains the default gate.
         guardrail_refs:
           - PY-TEST-002
         tasks:
           - id: HOST-001-T1
-            status: open
+            status: done
             title: Run the test job on Python 3.14
             instructions:
               files:
@@ -248,12 +251,75 @@ milestones:
             guardrail_refs:
               - PY-TEST-002
           - id: HOST-001-T2
-            status: open
+            status: done
             title: Add a repo-level container CI script
             instructions:
               files:
                 - scripts/check-ci-docker.sh
             verification:
               - sh scripts/check-ci-docker.sh
+            guardrail_refs:
+              - PY-TEST-002
+      - id: CANCEL-001
+        status: done
+        title: Cancel in-flight nodes when the run is cancelled
+        overview:
+          problem: >-
+            A cancelled caller left node tasks running, and a node with
+            a close method could skip it.
+          goal: >-
+            In-flight node tasks stop, and close still runs.
+        decision: >-
+          In the context of a graph run, facing a cancelled caller, we
+          decided to cancel in-flight node tasks and still run close, to
+          achieve prompt shutdown, accepting that thread and process
+          workers keep running until they return.
+        acceptance_criteria:
+          - An asyncio.Event or task cancellation cancels in-flight node tasks
+          - close still runs after cancellation
+        guardrail_refs:
+          - PY-CONC-001
+          - PY-TEST-002
+        tasks:
+          - id: CANCEL-001-T1
+            status: done
+            title: Cancel the wave and still close the node
+            instructions:
+              files:
+                - src/nodeio/run.py
+                - src/nodeio/executors.py
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-TEST-002
+      - id: CB-001
+        status: done
+        title: Invoke a callback when a node publishes an output
+        overview:
+          problem: >-
+            Callers can read outputs only after the run returns. They
+            cannot observe a value when the node publishes it.
+          goal: >-
+            The coordinator can push each published output to a callback.
+        decision: >-
+          In the context of a graph run, facing callers that need each
+          published value, we decided to invoke an optional output
+          callback from the coordinator, to achieve a push of outputs
+          without a second pass, accepting that the callback runs on
+          the event loop.
+        acceptance_criteria:
+          - The callback receives each published output during the run
+          - A missing callback leaves the returned outputs unchanged
+        guardrail_refs:
+          - PY-TEST-002
+        tasks:
+          - id: CB-001-T1
+            status: done
+            title: Call on_output when a node publishes
+            instructions:
+              files:
+                - src/nodeio/run.py
+            verification:
+              - sh scripts/check-ci-local.sh
             guardrail_refs:
               - PY-TEST-002

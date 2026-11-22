@@ -49,9 +49,7 @@ def test_gate_mux_demux_and_subgraph() -> None:
     opened = load((gate("g"),), (), entries=(("g", "open"), ("g", "value")))
     closed = asyncio.run(run(opened, {"g": {"open": False, "value": 1}}))
     assert closed["g"]["value"] is None
-    chosen = load(
-        (mux("m"),), (), entries=(("m", "select"), ("m", "left"), ("m", "right"))
-    )
+    chosen = load((mux("m"),), (), entries=(("m", "select"), ("m", "left"), ("m", "right")))
     muxed = asyncio.run(run(chosen, {"m": {"select": "left", "left": 1, "right": 2}}))
     assert muxed["m"]["value"] == 1
     split = load((demux("d"),), (), entries=(("d", "key"), ("d", "value")))

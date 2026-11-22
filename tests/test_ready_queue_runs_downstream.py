@@ -4,44 +4,23 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Mapping
 
 import pytest
 
 from nodeio import (
-    Edge,
     GraphError,
     LoggingObserver,
-    Node,
-    Port,
     load,
     run,
 )
-from tests.support import async_node
+from tests.support import async_node, increment_graph
 
 
 def test_ready_queue_runs_downstream() -> None:
     """Run this step."""
-
-    async def add(
-        inputs: Mapping[str, object], side: Mapping[str, object]
-    ) -> dict[str, object]:
-        """Run this step."""
-        del side
-        value = inputs["value"]
-        if not isinstance(value, int):
-            raise TypeError("value must be an int")
-        return {"value": value + 1}
-
-    source = Node("a", "map", (Port("value", "int"),), (Port("value", "int"),), add)
-    sink = Node("b", "map", (Port("value", "int"),), (Port("value", "int"),), add)
-    definition = load(
-        (source, sink),
-        (Edge("a", "value", "b", "value"),),
-        entries=(("a", "value"),),
-    )
-    assert "a -> b" in definition.to_dot()
-    assert "a --> b" in definition.to_mermaid()
+    source, _sink, definition = increment_graph()
+    assert '"a" -> "b"' in definition.to_dot()
+    assert '"a" --> "b"' in definition.to_mermaid()
     outputs = asyncio.run(run(definition, {"a": {"value": 1}}))
     assert outputs["b"]["value"] == 3
     rejected = load((source,), (), entries=(("a", "value"),))
@@ -64,9 +43,7 @@ def test_observer_omits_values(capsys: pytest.CaptureFixture[str]) -> None:
     configure()
     node = async_node("a")
     definition = load((node,), (), entries=(("a", "value"),))
-    asyncio.run(
-        run(definition, {"a": {"value": "secret"}}, observer=LoggingObserver("demo"))
-    )
+    asyncio.run(run(definition, {"a": {"value": "secret"}}, observer=LoggingObserver("demo")))
     captured = capsys.readouterr()
     text = captured.err + captured.out
     assert "secret" not in text

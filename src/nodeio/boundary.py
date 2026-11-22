@@ -7,9 +7,27 @@ A sibling ``boundary.pyi`` is what type checkers read. This module keeps
 from __future__ import annotations
 
 import logging
+import ssl
 from typing import Protocol
 
+from nodeio.errors import GraphError
 from nodeio.graph import GraphDefinition
+
+
+def otel_tracer() -> object | None:
+    """Return the OpenTelemetry tracer, or ``None`` when it is absent.
+
+    Returns:
+        The ``nodeio`` tracer, or ``None`` when the API is not installed.
+    """
+    try:
+        from opentelemetry import trace
+    except ImportError:
+        return None
+    get_tracer = getattr(trace, "get_tracer", None)
+    if not callable(get_tracer):
+        return None
+    return get_tracer("nodeio")
 
 
 def named_logger(name: str) -> logging.Logger:
@@ -32,8 +50,12 @@ async def http_exchange(
     timeout: float,
     verify: bool | str,
     cert: tuple[str, str] | None,
+    max_bytes: int,
 ) -> tuple[int, bytes]:
     """Perform one HTTP request with an owned client.
+
+    Redirects are not followed. The body is read in chunks and rejected
+    once it grows past ``max_bytes``, before the full payload is kept.
 
     Args:
         method: HTTP method.
@@ -41,25 +63,97 @@ async def http_exchange(
         timeout: Seconds for the request.
         verify: TLS verification flag or a CA bundle path.
         cert: Certificate and key paths, or ``None``.
+        max_bytes: Maximum response body size.
 
     Returns:
         The status code and the response body.
     """
     import httpx
 
-    async with httpx.AsyncClient(timeout=timeout, verify=verify, cert=cert) as owned:
-        response = await owned.request(method, url)
-        status = response.status_code
-        body = response.content
-    return int(status), bytes(body)
+    async with (
+        httpx.AsyncClient(
+            timeout=timeout,
+            verify=_tls_setting(verify),
+            cert=cert,
+            follow_redirects=False,
+        ) as owned,
+        owned.stream(method, url) as response,
+    ):
+        status = int(response.status_code)
+        body = await _read_limited(response, max_bytes)
+    return status, body
+
+
+def _tls_setting(verify: bool | str) -> ssl.SSLContext | str | bool:
+    """Return the TLS setting for an owned client.
+
+    ``False`` becomes a context that does not check the server certificate.
+    Callers must already have required the insecure opt-in.
+
+    Args:
+        verify: ``True``, ``False``, or a CA bundle path.
+
+    Returns:
+        The value httpx accepts for ``verify``.
+    """
+    if verify is not False:
+        return verify
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context
+
+
+async def _read_limited(response: object, max_bytes: int) -> bytes:
+    read = getattr(response, "aiter_bytes", None)
+    if not callable(read):
+        raise GraphError("response cannot be streamed")
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in read():
+        piece = bytes(chunk)
+        total += len(piece)
+        if total > max_bytes:
+            raise GraphError("response exceeds max_bytes")
+        chunks.append(piece)
+    return b"".join(chunks)
+
+
+def grpc_channel(
+    target: str,
+    allow_insecure: bool,
+    root_certificates: bytes | None,
+    private_key: bytes | None,
+    certificate_chain: bytes | None,
+) -> object:
+    """Open a ``grpc.aio`` channel.
+
+    Args:
+        target: Host and port.
+        allow_insecure: Open an insecure channel when true.
+        root_certificates: PEM roots, or ``None``.
+        private_key: PEM client key for mutual TLS, or ``None``.
+        certificate_chain: PEM client certificate, or ``None``.
+
+    Returns:
+        A channel with ``unary_unary`` and ``close``.
+    """
+    import grpc  # pylint: disable=import-error
+
+    if allow_insecure:
+        return grpc.aio.insecure_channel(target)
+    credentials = grpc.ssl_channel_credentials(
+        root_certificates=root_certificates,
+        private_key=private_key,
+        certificate_chain=certificate_chain,
+    )
+    return grpc.aio.secure_channel(target, credentials)
 
 
 class Observer(Protocol):
     """Notifications for one node attempt."""
 
-    def on_start(
-        self, definition: GraphDefinition, node_id: str, *, run_id: str
-    ) -> None:
+    def on_start(self, definition: GraphDefinition, node_id: str, *, run_id: str) -> None:
         """A node is about to run.
 
         Args:

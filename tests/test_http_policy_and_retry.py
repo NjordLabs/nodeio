@@ -27,9 +27,7 @@ def test_http_policy_and_retry() -> None:
             """Run this step."""
             self.calls = 0
 
-        async def request(
-            self, method: str, url: str, timeout: float
-        ) -> SimpleNamespace:
+        async def request(self, method: str, url: str, timeout: float) -> SimpleNamespace:
             """Run this step."""
             del url, timeout
             self.calls += 1

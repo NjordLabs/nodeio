@@ -2,6 +2,7 @@ import logging
 
 from nodeio.graph import GraphDefinition
 
+def otel_tracer() -> object | None: ...
 def named_logger(name: str) -> logging.Logger: ...
 async def http_exchange(
     method: str,
@@ -9,12 +10,18 @@ async def http_exchange(
     timeout: float,
     verify: bool | str,
     cert: tuple[str, str] | None,
+    max_bytes: int,
 ) -> tuple[int, bytes]: ...
+def grpc_channel(
+    target: str,
+    allow_insecure: bool,
+    root_certificates: bytes | None,
+    private_key: bytes | None,
+    certificate_chain: bytes | None,
+) -> object: ...
 
 class Observer:
-    def on_start(
-        self, definition: GraphDefinition, node_id: str, *, run_id: str
-    ) -> None: ...
+    def on_start(self, definition: GraphDefinition, node_id: str, *, run_id: str) -> None: ...
     def on_success(
         self,
         definition: GraphDefinition,
