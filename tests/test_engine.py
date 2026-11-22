@@ -34,7 +34,10 @@ from tests.workers import double
 
 
 def _async_node(node_id: str, kind: str = "map") -> Node:
+    """Run this step."""
+
     async def runner(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+        """Run this step."""
         await asyncio.sleep(0)
         seen = side.get("seen")
         return {"value": inputs.get("value"), "seen": seen}
@@ -49,6 +52,7 @@ def _async_node(node_id: str, kind: str = "map") -> Node:
 
 
 def test_cycle_is_named() -> None:
+    """Run this step."""
     left = Node("a", "map", (Port("value", "any"),), (Port("value", "any"),))
     right = Node("b", "map", (Port("value", "any"),), (Port("value", "any"),))
     edges = (
@@ -62,6 +66,7 @@ def test_cycle_is_named() -> None:
 
 
 def test_definitions_do_not_share_side_packets() -> None:
+    """Run this step."""
     side = {"token": "secret"}
     node = Node("a", "map", (), (Port("value", "any"),))
     first = load((node,), (), side=side)
@@ -73,6 +78,7 @@ def test_definitions_do_not_share_side_packets() -> None:
 
 
 def test_duplicate_id_and_unconnected_input() -> None:
+    """Run this step."""
     node = Node("a", "map", (Port("value", "any"),), ())
     with pytest.raises(GraphError, match="duplicate"):
         load((node, Node("a", "map")), ())
@@ -81,6 +87,7 @@ def test_duplicate_id_and_unconnected_input() -> None:
 
 
 def test_type_mismatch_and_unknown_node() -> None:
+    """Run this step."""
     left = Node("a", "map", (), (Port("value", "int"),))
     right = Node("b", "map", (Port("value", "str"),), ())
     with pytest.raises(GraphError, match="type mismatch"):
@@ -90,10 +97,15 @@ def test_type_mismatch_and_unknown_node() -> None:
 
 
 def test_factory_mixes_kinds() -> None:
+    """Run this step."""
+
     def make(node_id: str, scale: int = 1) -> Node:
+        """Run this step."""
+
         async def runner(
             inputs: Mapping[str, object], side: Mapping[str, object]
         ) -> dict[str, object]:
+            """Run this step."""
             del side
             value = inputs["value"]
             if not isinstance(value, int):
@@ -107,6 +119,7 @@ def test_factory_mixes_kinds() -> None:
     other = Node("src", "const", (), (Port("value", "int"),))
 
     async def source(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+        """Run this step."""
         del inputs, side
         return {"value": 2}
 
@@ -121,10 +134,12 @@ def test_factory_mixes_kinds() -> None:
 
 
 def test_none_is_a_value_and_runs_are_isolated() -> None:
+    """Run this step."""
     node = _async_node("a")
     definition = load((node,), (), entries=(("a", "value"),), side={"seen": "from-side"})
 
     async def both() -> tuple[object, object]:
+        """Run this step."""
         left, right = await asyncio.gather(
             run(definition, {"a": {"value": None}}),
             run(definition, {"a": {"value": 1}}),
@@ -136,7 +151,10 @@ def test_none_is_a_value_and_runs_are_isolated() -> None:
 
 
 def test_failure_names_the_node_and_collect_continues() -> None:
+    """Run this step."""
+
     async def boom(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+        """Run this step."""
         del inputs, side
         raise RuntimeError("secret body")
 
@@ -149,7 +167,10 @@ def test_failure_names_the_node_and_collect_continues() -> None:
 
 
 def test_timeout_and_limit() -> None:
+    """Run this step."""
+
     async def slow(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+        """Run this step."""
         del inputs, side
         await asyncio.sleep(1)
         return {"value": 1}
@@ -163,7 +184,10 @@ def test_timeout_and_limit() -> None:
 
 
 def test_thread_and_process_executors() -> None:
+    """Run this step."""
+
     def sync(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+        """Run this step."""
         del side
         return {"value": inputs["value"]}
 
@@ -187,6 +211,7 @@ def test_thread_and_process_executors() -> None:
 
 
 def test_shared_memory_roundtrip() -> None:
+    """Run this step."""
     handle = SharedBytes.from_bytes(b"pixels")
     try:
         assert handle.read() == b"pixels"
@@ -195,7 +220,10 @@ def test_shared_memory_roundtrip() -> None:
 
 
 def test_ready_queue_runs_downstream() -> None:
+    """Run this step."""
+
     async def add(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+        """Run this step."""
         del side
         value = inputs["value"]
         if not isinstance(value, int):
@@ -216,6 +244,7 @@ def test_ready_queue_runs_downstream() -> None:
 
 
 def test_missing_seed() -> None:
+    """Run this step."""
     node = _async_node("a")
     definition = load((node,), (), entries=(("a", "value"),))
     with pytest.raises(GraphError, match="missing inputs"):
@@ -223,6 +252,7 @@ def test_missing_seed() -> None:
 
 
 def test_observer_omits_values(capsys: pytest.CaptureFixture[str]) -> None:
+    """Run this step."""
     from mimirlog import configure
 
     configure()
@@ -238,6 +268,7 @@ def test_observer_omits_values(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_gate_mux_demux_and_subgraph() -> None:
+    """Run this step."""
     reset_subgraphs()
     child_in = Node(
         "in",
@@ -274,14 +305,19 @@ def test_gate_mux_demux_and_subgraph() -> None:
 
 
 def test_http_policy_and_retry() -> None:
+    """Run this step."""
     with pytest.raises(GraphError, match="timeout"):
         http_node("h", timeout=0)
 
     class Client:
+        """Hold a test double."""
+
         def __init__(self) -> None:
+            """Run this step."""
             self.calls = 0
 
         async def request(self, method: str, url: str, timeout: float) -> SimpleNamespace:
+            """Run this step."""
             del url, timeout
             self.calls += 1
             if method == "GET" and self.calls == 1:
@@ -318,11 +354,17 @@ def test_http_policy_and_retry() -> None:
 
 
 def test_http_does_not_retry_post_and_caps_the_body() -> None:
+    """Run this step."""
+
     class Client:
+        """Hold a test double."""
+
         def __init__(self) -> None:
+            """Run this step."""
             self.calls = 0
 
         async def request(self, method: str, url: str, timeout: float) -> SimpleNamespace:
+            """Run this step."""
             del method, url, timeout
             self.calls += 1
             return SimpleNamespace(status_code=500, content=b"12345")
@@ -338,12 +380,14 @@ def test_http_does_not_retry_post_and_caps_the_body() -> None:
 
 
 def test_grpc_requires_a_deadline_and_a_secure_call() -> None:
+    """Run this step."""
     with pytest.raises(GraphError, match="deadline"):
         grpc_node("g", method="pkg.Service/Run", deadline=0)
     with pytest.raises(GraphError, match="insecure"):
         grpc_node("g", method="pkg.Service/Run", deadline=1, insecure=True)
 
     async def unary(method: str, request: object, deadline: float) -> dict[str, object]:
+        """Run this step."""
         return {"method": method, "request": request, "deadline": deadline}
 
     node = grpc_node("g", method="pkg.Service/Run", deadline=0.5, call=unary)
@@ -361,6 +405,7 @@ def test_grpc_requires_a_deadline_and_a_secure_call() -> None:
 
 
 def test_remaining_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run this step."""
     opened = load((gate("g"),), (), entries=(("g", "open"), ("g", "value")))
     assert asyncio.run(run(opened, {"g": {"open": True, "value": 3}}))["g"]["value"] == 3
     chosen = load((mux("m"),), (), entries=(("m", "select"), ("m", "left"), ("m", "right")))
@@ -382,6 +427,7 @@ def test_remaining_branches(monkeypatch: pytest.MonkeyPatch) -> None:
     load((left, other, right), (Edge("a", "value", "b", "value"), Edge("c", "value", "b", "value")))
 
     async def empty(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+        """Run this step."""
         del inputs, side
         return {}
 
@@ -392,6 +438,7 @@ def test_remaining_branches(monkeypatch: pytest.MonkeyPatch) -> None:
         asyncio.run(run(stalled, {}))
 
     async def check_executor() -> None:
+        """Run this step."""
         from nodeio.executors import LocalExecutor
 
         executor = LocalExecutor()
@@ -421,13 +468,18 @@ def test_remaining_branches(monkeypatch: pytest.MonkeyPatch) -> None:
         asyncio.run(run(definition, {}, observer=LoggingObserver("demo")))
 
     class Owned:
+        """Hold a test double."""
+
         async def __aenter__(self) -> Owned:
+            """Run this step."""
             return self
 
         async def __aexit__(self, *args: object) -> bool:
+            """Run this step."""
             return False
 
         async def request(self, method: str, url: str) -> SimpleNamespace:
+            """Run this step."""
             del method, url
             return SimpleNamespace(status_code=204, content=b"")
 
@@ -438,7 +490,10 @@ def test_remaining_branches(monkeypatch: pytest.MonkeyPatch) -> None:
     assert status["h"]["status"] == 204
 
     class Weird:
+        """Hold a test double."""
+
         async def request(self, method: str, url: str, timeout: float) -> SimpleNamespace:
+            """Run this step."""
             del method, url, timeout
             return SimpleNamespace(status_code="no", content=b"")
 
@@ -453,17 +508,22 @@ def test_remaining_branches(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def _number(inputs: Mapping[str, object], side: Mapping[str, object]) -> int:
+    """Run this step."""
     del inputs, side
     return 1
 
 
 async def _boom(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+    """Run this step."""
     del inputs, side
     raise RuntimeError("nope")
 
 
 def _identity() -> Callable[..., object]:
+    """Run this step."""
+
     async def runner(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+        """Run this step."""
         del side
         return {"value": inputs["value"]}
 

@@ -6,9 +6,9 @@ requires = ["setuptools>=82.0.1", "wheel>=0.47.0"]
 name = "nodeio"
 version = "0.2.0"
 dependencies = [
-  "mimirlog @ git+https://github.com/NjordLabs/mimirlog.git@1b98669f8334811bd671c238a68cf23094bb2262",
+  "mimirlog @ https://github.com/NjordLabs/mimirlog/archive/9b4e3c5dba1fd862c6e9c770d072e06d7637694e.tar.gz",
   "pydantic>=2.0",
-  "pymjolnir @ git+https://github.com/NjordLabs/pymjolnir.git@aa9a2ee85fafd2102bfdb0a5b3bb97d194715d20",
+  "pymjolnir @ https://github.com/NjordLabs/pymjolnir/archive/aa9a2ee85fafd2102bfdb0a5b3bb97d194715d20.tar.gz",
 ]
 requires-python = ">=3.13"
 authors = [{name = "pirlruc"}]
@@ -33,7 +33,6 @@ dev = [
   "httpx>=0.28",
   "interrogate>=1.7.0",
   "mypy>=1.20.2",
-  "pre-commit==4.6.0",
   "pylint>=3.0",
   "pytest>=8.0",
   "ruff==0.15.12",
@@ -47,7 +46,7 @@ Issues = "https://github.com/NjordLabs/nodeio/issues"
 Repository = "https://github.com/NjordLabs/nodeio"
 
 [tool.bandit]
-exclude_dirs = [".venv", "build", "dist", "tests"]
+exclude_dirs = [".venv", "build", "dist", "tests", "scripts", "docs", ".github"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
@@ -65,12 +64,16 @@ show_missing = true
 
 [tool.interrogate]
 fail-under = 95
+ignore-nested-classes = true
 ignore-nested-functions = true
+ignore-private = true
+ignore-semiprivate = true
 
 [tool.mypy]
 check_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_untyped_defs = true
+exclude = ["(^|/)docs/", "(^|/)\\.github/", "(^|/)scripts/"]
 explicit_package_bases = true
 mypy_path = ["src"]
 namespace_packages = true
@@ -121,7 +124,7 @@ docstring-code-format = true
 select = ["B", "C4", "D", "DOC", "E", "F", "I", "SIM", "UP", "W"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D"]
+"tests/**" = ["D", "DOC"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
