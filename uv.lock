@@ -794,12 +794,14 @@ wheels = [
 
 [[package]]
 name = "mimirlog"
-version = "0.1.0"
-source = { url = "https://github.com/NjordLabs/mimirlog/archive/9b4e3c5dba1fd862c6e9c770d072e06d7637694e.tar.gz" }
+version = "0.2.0"
+source = { url = "https://github.com/NjordLabs/mimirlog/releases/download/v0.2.0/mimirlog-0.2.0-py3-none-any.whl" }
 dependencies = [
     { name = "pymjolnir" },
 ]
-sdist = { hash = "sha256:cc0e3a8458cac02b601ba0fd9c8638d3bf7e46d02ee34cc1e4f1cc4cbf2cfa98" }
+wheels = [
+    { url = "https://github.com/NjordLabs/mimirlog/releases/download/v0.2.0/mimirlog-0.2.0-py3-none-any.whl", hash = "sha256:bbf5794ca4182ed638549fc139fa4cc0a10c9d6be0926108725e2620984430b4" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -810,8 +812,9 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.20.2" },
     { name = "pydantic", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.0" },
-    { name = "pymjolnir", url = "https://github.com/NjordLabs/pymjolnir/archive/aa9a2ee85fafd2102bfdb0a5b3bb97d194715d20.tar.gz" },
+    { name = "pymjolnir", url = "https://github.com/NjordLabs/pymjolnir/releases/download/v0.1.1/pymjolnir-0.1.1-py3-none-any.whl" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.12" },
 ]
 provides-extras = ["dev"]
@@ -914,11 +917,11 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28" },
     { name = "httpx", marker = "extra == 'http'", specifier = ">=0.28" },
     { name = "interrogate", marker = "extra == 'dev'", specifier = ">=1.7.0" },
-    { name = "mimirlog", url = "https://github.com/NjordLabs/mimirlog/archive/9b4e3c5dba1fd862c6e9c770d072e06d7637694e.tar.gz" },
+    { name = "mimirlog", url = "https://github.com/NjordLabs/mimirlog/releases/download/v0.2.0/mimirlog-0.2.0-py3-none-any.whl" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.20.2" },
     { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.27" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.0" },
-    { name = "pymjolnir", url = "https://github.com/NjordLabs/pymjolnir/archive/aa9a2ee85fafd2102bfdb0a5b3bb97d194715d20.tar.gz" },
+    { name = "pymjolnir", url = "https://github.com/NjordLabs/pymjolnir/releases/download/v0.1.1/pymjolnir-0.1.1-py3-none-any.whl" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.12" },
@@ -1023,9 +1026,11 @@ wheels = [
 
 [[package]]
 name = "pymjolnir"
-version = "0.1.0"
-source = { url = "https://github.com/NjordLabs/pymjolnir/archive/aa9a2ee85fafd2102bfdb0a5b3bb97d194715d20.tar.gz" }
-sdist = { hash = "sha256:275c42ff55ebe3b76a51f9645d4531a646c73dfef0df1699f9f7e740106fb2da" }
+version = "0.1.1"
+source = { url = "https://github.com/NjordLabs/pymjolnir/releases/download/v0.1.1/pymjolnir-0.1.1-py3-none-any.whl" }
+wheels = [
+    { url = "https://github.com/NjordLabs/pymjolnir/releases/download/v0.1.1/pymjolnir-0.1.1-py3-none-any.whl", hash = "sha256:5999ff4b244ee0215c96f1228b042f18ad33699dbbc2964d01abd2103eaf050d" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1034,10 +1039,10 @@ requires-dist = [
     { name = "coverage", extras = ["toml"], marker = "extra == 'dev'", specifier = ">=7.13.5" },
     { name = "interrogate", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.20.2" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = "==4.6.0" },
     { name = "pydantic", marker = "extra == 'dev'", specifier = ">=2.0" },
-    { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.0" },
+    { name = "pylint", marker = "extra == 'dev'", specifier = ">=4.0.9" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.12" },
 ]
 provides-extras = ["dev"]
