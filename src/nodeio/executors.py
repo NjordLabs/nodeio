@@ -8,10 +8,10 @@ that boundary through shared memory instead of being pickled.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import shared_memory
-from typing import Protocol
+from typing import Protocol, cast
 
 from nodeio.graph import Node
 
@@ -71,33 +71,73 @@ class LocalExecutor:
         Raises:
             TypeError: The runner did not return a mapping.
             ValueError: ``node.executor`` is not known.
+
+        Cancellation stops this coroutine. It does not stop a thread or
+        process worker that has already started; those run until they
+        return. ``close`` still runs when the runner is a lifecycle.
         """
         if node.runner is None:
             raise ValueError(f"{node.id} has no runner")
-        result = await self._invoke(node, inputs, side)
+        life = _as_lifecycle(node.runner)
+        if life is None:
+            result = await self._invoke(node, node.runner, inputs, side)
+        else:
+            result = await self._lifecycle(node, life, inputs, side)
         if not isinstance(result, Mapping):
             raise TypeError(f"{node.id} runner must return a mapping")
         return result
 
-    async def _invoke(
+    async def _lifecycle(
         self,
         node: Node,
+        life: _Lifecycle,
         inputs: Mapping[str, object],
         side: Mapping[str, object],
     ) -> object:
-        runner = node.runner
-        if runner is None:
-            raise ValueError(f"{node.id} has no runner")
+        await _drive(life.open)
+        try:
+            return await self._invoke(node, life.process, inputs, side)
+        finally:
+            await _drive_close(life.close)
+
+    async def _invoke(
+        self,
+        node: Node,
+        runner: Callable[..., object],
+        inputs: Mapping[str, object],
+        side: Mapping[str, object],
+    ) -> object:
         if node.executor == "async":
             return await runner(inputs, side)  # type: ignore[misc]
         if node.executor == "thread":
             return await asyncio.to_thread(runner, inputs, side)
         if node.executor == "process":
+            return await self._in_process(runner, inputs, side)
+        raise ValueError(f"unknown executor {node.executor}")
+
+    async def _in_process(
+        self,
+        runner: Callable[..., object],
+        inputs: Mapping[str, object],
+        side: Mapping[str, object],
+    ) -> object:
+        shared: list[SharedBytes] = []
+        try:
+            payload = _share_into(inputs, shared)
+            side_payload = _share_into(side, shared)
             pool = self._processes or ProcessPoolExecutor(max_workers=1)
             self._processes = pool
             loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(pool, runner, dict(inputs), dict(side))
-        raise ValueError(f"unknown executor {node.executor}")
+            result: object = await loop.run_in_executor(
+                pool,
+                _run_with_shared,
+                runner,
+                payload,
+                side_payload,
+            )
+            return result
+        finally:
+            _unlink_all(shared)
 
     def close(self) -> None:
         """Shut down a process pool this executor created."""
@@ -169,3 +209,84 @@ class SharedBytes:
         block = shared_memory.SharedMemory(name=self.name)
         block.close()
         block.unlink()
+
+
+class _Lifecycle(Protocol):
+    """A node body with open, process, and close."""
+
+    def open(self) -> object:
+        """Prepare the node before the first process call."""
+        ...
+
+    def process(self, inputs: Mapping[str, object], side: Mapping[str, object]) -> object:
+        """Run the node once.
+
+        Args:
+            inputs: Input port values.
+            side: Side packets.
+
+        Returns:
+            The output mapping.
+        """
+        ...
+
+    def close(self) -> object:
+        """Release resources opened for this run."""
+        ...
+
+
+def _as_lifecycle(runner: object) -> _Lifecycle | None:
+    if not all(callable(getattr(runner, name, None)) for name in ("open", "process", "close")):
+        return None
+    return cast(_Lifecycle, runner)
+
+
+async def _drive(func: Callable[[], object]) -> None:
+    result = func()
+    if isinstance(result, Awaitable):
+        await result
+
+
+async def _drive_close(func: Callable[[], object]) -> None:
+    task = asyncio.current_task()
+    pending = task.cancelling() if task is not None else 0
+    if task is not None:
+        while task.cancelling():
+            task.uncancel()
+    try:
+        await _drive(func)
+    finally:
+        if task is not None and pending:
+            task.cancel()
+
+
+def _share_into(values: Mapping[str, object], shared: list[SharedBytes]) -> dict[str, object]:
+    payload: dict[str, object] = {}
+    for key, value in values.items():
+        if isinstance(value, bytes) and value:
+            handle = SharedBytes.from_bytes(value)
+            shared.append(handle)
+            payload[key] = handle
+        else:
+            payload[key] = value
+    return payload
+
+
+def _unlink_all(shared: list[SharedBytes]) -> None:
+    for handle in shared:
+        handle.unlink()
+
+
+def _restore(values: Mapping[str, object]) -> dict[str, object]:
+    restored: dict[str, object] = {}
+    for key, value in values.items():
+        restored[key] = value.read() if isinstance(value, SharedBytes) else value
+    return restored
+
+
+def _run_with_shared(
+    runner: Callable[..., object],
+    inputs: dict[str, object],
+    side: dict[str, object],
+) -> object:
+    return runner(_restore(inputs), _restore(side))
