@@ -13,8 +13,9 @@ from nodeio.errors import GraphError
 from nodeio.executors import Executor, LocalExecutor
 from nodeio.flow import EdgeBuffer
 from nodeio.graph import Edge, GraphDefinition, Node
-from nodeio.notify import _execute, _notify_start, _notify_success, _publish
+from nodeio.notify import _execute, _notify_start, _notify_success
 from nodeio.observe import Observer
+from nodeio.publish import _publish
 
 Values = dict[tuple[str, str], object]
 Policy = Literal["fail", "collect"]
