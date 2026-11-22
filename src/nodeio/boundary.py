@@ -7,6 +7,7 @@ A sibling ``boundary.pyi`` is what type checkers read. This module keeps
 from __future__ import annotations
 
 import logging
+import ssl
 from typing import Protocol
 
 from nodeio.errors import GraphError
@@ -72,7 +73,7 @@ async def http_exchange(
     async with (
         httpx.AsyncClient(
             timeout=timeout,
-            verify=verify,
+            verify=_tls_setting(verify),
             cert=cert,
             follow_redirects=False,
         ) as owned,
@@ -81,6 +82,26 @@ async def http_exchange(
         status = int(response.status_code)
         body = await _read_limited(response, max_bytes)
     return status, body
+
+
+def _tls_setting(verify: bool | str) -> ssl.SSLContext | str | bool:
+    """Return the TLS setting for an owned client.
+
+    ``False`` becomes a context that does not check the server certificate.
+    Callers must already have required the insecure opt-in.
+
+    Args:
+        verify: ``True``, ``False``, or a CA bundle path.
+
+    Returns:
+        The value httpx accepts for ``verify``.
+    """
+    if verify is not False:
+        return verify
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context
 
 
 async def _read_limited(response: object, max_bytes: int) -> bytes:

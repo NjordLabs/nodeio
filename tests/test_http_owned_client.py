@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ssl
 
 import pytest
 
@@ -97,3 +98,15 @@ def test_redirect_is_not_followed(monkeypatch: pytest.MonkeyPatch) -> None:
     outputs = asyncio.run(run(graph, {"h": {"method": "GET", "url": "https://example.test"}}))
     assert outputs["h"]["status"] == 302
     assert seen["follow_redirects"] is False
+
+
+def test_insecure_opt_in_skips_certificate_checks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit insecure client receives a context that does not verify TLS."""
+    seen: dict[str, object] = {}
+    monkeypatch.setattr("httpx.AsyncClient", _factory(204, (), seen))
+    node = http_node("h", timeout=1, verify=False, allow_insecure=True)
+    graph = load((node,), (), entries=(("h", "method"), ("h", "url")))
+    asyncio.run(run(graph, {"h": {"method": "GET", "url": "https://example.test"}}))
+    setting = seen["verify"]
+    assert isinstance(setting, ssl.SSLContext)
+    assert setting.verify_mode == ssl.CERT_NONE
