@@ -1,0 +1,259 @@
+repo: NjordLabs/nodeio
+
+milestones:
+  - name: Phase 1 — Foundation
+    epics:
+      - id: ENG-001
+        status: open
+        title: Replace the graph engine
+        overview:
+          problem: >-
+            Loading a cyclic graph never returned, async work ran on the
+            event loop, and concurrent runs shared one context.
+          goal: >-
+            An immutable definition, a ready queue, and one isolated run
+            per request.
+        decision: >-
+          In the context of a Python service graph, facing shared mutable
+          runs, we decided to compile a definition once and execute a
+          fresh run per request, to achieve isolated requests, accepting
+          that the previous NetworkX loader is removed.
+        acceptance_criteria:
+          - A cycle fails at load time and names the nodes
+          - Two runs of one definition do not share values
+          - Async runners are awaited and synchronous runners leave the loop
+        guardrail_refs:
+          - PY-TEST-002
+          - PY-CONC-001
+        tasks:
+          - id: ENG-001-T1
+            status: open
+            title: Implement the definition, scheduler, and executors
+            instructions:
+              files:
+                - src/nodeio/graph.py
+                - src/nodeio/run.py
+                - src/nodeio/executors.py
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-TEST-002
+          - id: ENG-001-T2
+            status: open
+            title: Publish to PyPI with a trusted publisher
+            instructions:
+              files:
+                - .github/workflows/publish-pypi.yml
+            verification:
+              - Pending publisher for NjordLabs/nodeio, workflow .github/workflows/publish-pypi.yml, environment pypi
+            guardrail_refs:
+              - PY-TEST-002
+      - id: BIND-001
+        status: rejected
+        title: Bind the C++ libraries into this package
+        resolution: >-
+          The C++ graph is single-threaded and copies values along edges,
+          and the pattern library is trivial in Python, so bindings would
+          not remove a cost. The vision library is the only candidate with
+          a real gain, and it stays out of reach while that library is
+          private. Revisit with a stable ABI wheel when a Python node needs
+          those algorithms.
+        overview:
+          problem: >-
+            Callers asked whether the C++ libraries should be imported
+            through a binding.
+          goal: >-
+            Record why this wave does not add bindings.
+        decision: >-
+          In the context of a Python graph engine, facing a request for
+          bindings, we decided not to add them in this wave, to achieve a
+          pure-Python release, accepting that vision algorithms stay in
+          the C++ library until a node needs them.
+        guardrail_refs:
+          - PY-CONC-001
+      - id: WORK-001
+        status: open
+        title: Split queue workers into a later package
+        overview:
+          problem: >-
+            A multi-host queue needs brokers, retries, and dead letters,
+            which would bury the graph engine.
+          goal: >-
+            Keep an executor protocol here and add a worker package only
+            when a deployment must scale across hosts.
+        decision: >-
+          In the context of image work on one host, facing a request for
+          a queue, we decided to ship a process executor and shared
+          memory now and leave the worker package for later, to achieve
+          a small engine, accepting that cross-host jobs are not served
+          yet.
+        guardrail_refs:
+          - PY-CONC-001
+      - id: STREAM-001
+        status: open
+        title: Decide timestamped stream sync
+        overview:
+          problem: >-
+            Video frames need timestamps and input sync, and this wave's
+            runs are request-shaped.
+          goal: >-
+            Record the decision point without implementing stream sync.
+        decision: >-
+          In the context of a request-shaped graph, facing video sync,
+          we decided to leave timestamped streaming for a later epic,
+          to achieve a shippable request engine, accepting that frame
+          sync is not available yet.
+        guardrail_refs:
+          - PY-CONC-001
+      - id: LIFE-001
+        status: open
+        title: Give nodes an open, process, and close lifecycle
+        overview:
+          problem: >-
+            A node is a runner callable. It cannot open a resource
+            before the first request or close it after the last.
+          goal: >-
+            A node can open, process, and close without changing the
+            request-shaped scheduler.
+        decision: >-
+          In the context of a request-shaped graph, facing nodes that
+          hold resources, we decided to record a lifecycle as follow-up
+          work, to achieve a releasable runner now, accepting that
+          resources are opened inside the runner.
+        guardrail_refs:
+          - PY-CONC-001
+        tasks:
+          - id: LIFE-001-T1
+            status: open
+            title: Call open and close around a node's process method
+            instructions:
+              files:
+                - src/nodeio/graph.py
+                - src/nodeio/run.py
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-TEST-002
+      - id: FLOW-001
+        status: open
+        title: Bound queues between nodes
+        overview:
+          problem: >-
+            The scheduler limits how many nodes run at once. It does
+            not bound the values waiting on an edge.
+          goal: >-
+            A producer blocks when a downstream queue is full.
+        decision: >-
+          In the context of a request-shaped graph, facing unbounded
+          edges, we decided to leave flow control for a later change,
+          to achieve a small scheduler now, accepting that a fast
+          producer can hold an entire request in memory.
+        guardrail_refs:
+          - PY-CONC-001
+        tasks:
+          - id: FLOW-001-T1
+            status: open
+            title: Add a bounded queue and backpressure on edges
+            instructions:
+              files:
+                - src/nodeio/run.py
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-TEST-002
+      - id: GRPC-001
+        status: open
+        title: Call gRPC through a real channel
+        overview:
+          problem: >-
+            The gRPC node requires an injected call. The default path
+            reports that the grpc extra is not installed.
+          goal: >-
+            An installed extra opens a TLS channel with the required
+            deadline.
+        decision: >-
+          In the context of a client node, facing a missing channel,
+          we decided to keep the injected call and record the channel
+          as follow-up, to achieve a releasable pipe now, accepting
+          that callers must pass the call.
+        guardrail_refs:
+          - PY-TEST-002
+        tasks:
+          - id: GRPC-001-T1
+            status: open
+            title: Open a TLS grpcio.aio channel from the grpc extra
+            instructions:
+              files:
+                - src/nodeio/pipes.py
+                - pyproject.toml
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-TEST-002
+      - id: OTEL-001
+        status: open
+        title: Export node spans from an optional extra
+        overview:
+          problem: >-
+            Logging events have a run id and a duration. They are not
+            OpenTelemetry spans.
+          goal: >-
+            An extra can emit a span per node without a required
+            dependency.
+        decision: >-
+          In the context of a graph run, facing a request for traces,
+          we decided to keep the logging observer and record an
+          OpenTelemetry extra as follow-up, to achieve a release
+          without the SDK, accepting that traces are not exported yet.
+        guardrail_refs:
+          - PY-TEST-002
+        tasks:
+          - id: OTEL-001-T1
+            status: open
+            title: Add an OpenTelemetry observer extra
+            instructions:
+              files:
+                - src/nodeio/observe.py
+                - pyproject.toml
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-TEST-002
+      - id: HOST-001
+        status: open
+        title: Cover Python 3.14 and the container CI script
+        overview:
+          problem: >-
+            The test matrix is Python 3.13, and the container parity
+            script lives in the scaffold submodule rather than scripts/.
+          goal: >-
+            The test job can run on 3.14, and a repo-level script can
+            run the remaining tools in Docker.
+        decision: >-
+          In the context of the first release, facing a single
+          interpreter, we decided to ship 3.13 and record the rest,
+          to achieve a green release now, accepting that 3.14 and the
+          repo-level container script are follow-up work.
+        guardrail_refs:
+          - PY-TEST-002
+        tasks:
+          - id: HOST-001-T1
+            status: open
+            title: Run the test job on Python 3.14
+            instructions:
+              files:
+                - .github/workflows/ci-quality.yml
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-TEST-002
+          - id: HOST-001-T2
+            status: open
+            title: Add a repo-level container CI script
+            instructions:
+              files:
+                - scripts/check-ci-docker.sh
+            verification:
+              - sh scripts/check-ci-docker.sh
+            guardrail_refs:
+              - PY-TEST-002

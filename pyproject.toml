@@ -1,0 +1,141 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=82.0.1", "wheel>=0.47.0"]
+
+[project]
+name = "nodeio"
+version = "0.2.0"
+dependencies = [
+  "mimirlog @ https://github.com/NjordLabs/mimirlog/archive/9b4e3c5dba1fd862c6e9c770d072e06d7637694e.tar.gz",
+  "pydantic>=2.0",
+  "pymjolnir @ https://github.com/NjordLabs/pymjolnir/archive/aa9a2ee85fafd2102bfdb0a5b3bb97d194715d20.tar.gz",
+]
+requires-python = ">=3.13"
+authors = [{name = "pirlruc"}]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
+description = "Async graph engine for Python services"
+keywords = ["graph", "pipeline", "python"]
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+
+[project.optional-dependencies]
+dev = [
+  "bandit[toml]==1.9.4",
+  "commitizen>=3.0",
+  "coverage[toml]>=7.13.5",
+  "httpx>=0.28",
+  "interrogate>=1.7.0",
+  "mypy>=1.20.2",
+  "pylint>=3.0",
+  "pytest>=8.0",
+  "pytest-cov>=6.0",
+  "ruff==0.15.12",
+]
+grpc = ["grpcio>=1.70"]
+http = ["httpx>=0.28"]
+
+[project.urls]
+Changelog = "https://github.com/NjordLabs/nodeio/blob/main/CHANGELOG.md"
+Issues = "https://github.com/NjordLabs/nodeio/issues"
+Repository = "https://github.com/NjordLabs/nodeio"
+
+[tool.bandit]
+exclude_dirs = [".venv", "build", "dist", "tests", "scripts", "docs", ".github"]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "v$version"
+update_changelog_on_bump = true
+version_provider = "pep621"
+
+[tool.coverage.run]
+branch = true
+source = ["nodeio"]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+
+[tool.interrogate]
+fail-under = 95
+ignore-nested-classes = true
+ignore-nested-functions = true
+ignore-private = true
+ignore-semiprivate = true
+
+[tool.mypy]
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+exclude = ["(^|/)docs/", "(^|/)\\.github/", "(^|/)scripts/", "(^|/)tests/"]
+explicit_package_bases = true
+mypy_path = ["src"]
+namespace_packages = true
+no_implicit_optional = true
+plugins = ["pydantic.mypy"]
+python_version = "3.13"
+show_error_codes = true
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+disallow_untyped_defs = false
+module = "tests.*"
+
+[tool.pydantic-mypy]
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint.main]
+ignore = [".venv", "build", "dist"]
+py-version = "3.13"
+source-roots = [".", "src"]
+
+[tool.pylint.messages_control]
+disable = [
+  "broad-exception-caught",
+  "import-outside-toplevel",
+  "too-few-public-methods",
+  "too-many-arguments",
+  "too-many-locals",
+  "too-many-positional-arguments",
+  "unnecessary-ellipsis",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+preview = true
+target-version = "py313"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = ["B", "C4", "D", "DOC", "E", "F", "I", "SIM", "UP", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/**" = ["D", "DOC"]
+"tests/**" = ["D", "DOC"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.setuptools.package-data]
+nodeio = ["py.typed"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
