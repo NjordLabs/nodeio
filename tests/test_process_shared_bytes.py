@@ -52,6 +52,15 @@ def test_process_unlinks_when_the_call_fails(monkeypatch: pytest.MonkeyPatch) ->
     assert released
 
 
+def test_worker_bodies_reject_bad_payloads() -> None:
+    """Reject a non-bytes echo and surface the process failure in-process."""
+    with pytest.raises(TypeError, match="bytes"):
+        echo_bytes({"value": None}, {})
+    assert echo_bytes({"value": b"ab"}, {}) == {"value": b"ab"}
+    with pytest.raises(RuntimeError, match="process failed"):
+        fail_process({}, {})
+
+
 def test_empty_bytes_skip_shared_memory() -> None:
     """An empty payload is passed through without a shared block."""
     node = Node(

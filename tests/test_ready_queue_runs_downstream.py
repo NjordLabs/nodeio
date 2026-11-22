@@ -4,40 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Mapping
 
 import pytest
 
 from nodeio import (
-    Edge,
     GraphError,
     LoggingObserver,
-    Node,
-    Port,
     load,
     run,
 )
-from tests.support import async_node
+from tests.support import async_node, increment_graph
 
 
 def test_ready_queue_runs_downstream() -> None:
     """Run this step."""
-
-    async def add(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
-        """Run this step."""
-        del side
-        value = inputs["value"]
-        if not isinstance(value, int):
-            raise TypeError("value must be an int")
-        return {"value": value + 1}
-
-    source = Node("a", "map", (Port("value", "int"),), (Port("value", "int"),), add)
-    sink = Node("b", "map", (Port("value", "int"),), (Port("value", "int"),), add)
-    definition = load(
-        (source, sink),
-        (Edge("a", "value", "b", "value"),),
-        entries=(("a", "value"),),
-    )
+    source, _sink, definition = increment_graph()
     assert '"a" -> "b"' in definition.to_dot()
     assert '"a" --> "b"' in definition.to_mermaid()
     outputs = asyncio.run(run(definition, {"a": {"value": 1}}))

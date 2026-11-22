@@ -59,9 +59,12 @@ def test_subgraph_forwards_run_options() -> None:
     depth = {"current": 0, "peak": 0}
 
     class Recorder:
+        """Executor that records node ids and forwards to a local executor."""
+
         def __init__(self) -> None:
+            """Start with no recorded ids and no inner executor."""
             self.ids: list[str] = []
-            self._executor: object = None
+            self._executor: LocalExecutor | None = None
 
         async def run(
             self,
@@ -69,29 +72,35 @@ def test_subgraph_forwards_run_options() -> None:
             inputs: Mapping[str, object],
             side: Mapping[str, object],
         ) -> Mapping[str, object]:
-            from nodeio.executors import LocalExecutor
-
+            """Record the node and run it on a local executor."""
             self.ids.append(node.id)
-            if not isinstance(self._executor, LocalExecutor):
+            if self._executor is None:
                 self._executor = LocalExecutor()
             return await self._executor.run(node, inputs, side)
 
         def close(self) -> None:
-            if isinstance(self._executor, LocalExecutor):
+            """Close the inner executor when one was created."""
+            if self._executor is not None:
                 self._executor.close()
 
     class Watch:
+        """Observer that records the nodes that start."""
+
         def on_start(self, _definition: object, node_id: str, *, run_id: str) -> None:
+            """Remember the node that is starting."""
             del run_id
             seen.append(node_id)
 
         def on_success(self, *_args: object, **_kwargs: object) -> None:
+            """Ignore a successful node."""
             return None
 
         def on_exception(self, *_args: object, **_kwargs: object) -> None:
+            """Ignore a failed node."""
             return None
 
     async def hold(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+        """Hold the limit slot briefly, then return the input value."""
         del side
         depth["current"] += 1
         depth["peak"] = max(depth["peak"], depth["current"])
@@ -123,6 +132,7 @@ def test_subgraph_forwards_run_options() -> None:
     reset_subgraphs()
 
     async def boom(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+        """Fail the child node so collect keeps the sibling output."""
         del inputs, side
         raise RuntimeError("child")
 

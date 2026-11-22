@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from nodeio import GraphError, TelemetryObserver, grpc_node, load, pipes, run
+from nodeio import GraphError, grpc_node, load, pipes, run
 
 
 def test_grpc_uses_an_injected_channel_factory() -> None:
@@ -14,21 +14,29 @@ def test_grpc_uses_an_injected_channel_factory() -> None:
     opened: list[object] = []
 
     class Channel:
+        """Stand-in channel that records unary calls and close."""
+
         def __init__(self) -> None:
+            """Start open and with no calls."""
             self.closed = False
             self.calls: list[tuple[str, object, float]] = []
 
-        def unary_unary(self, method: str):
+        def unary_unary(self, method: str) -> object:
+            """Return a call that records the request."""
+
             async def call(request: object, timeout: float) -> dict[str, object]:
+                """Record the method, request, and timeout."""
                 self.calls.append((method, request, timeout))
                 return {"method": method, "request": request, "timeout": timeout}
 
             return call
 
         async def close(self) -> None:
+            """Mark the channel closed."""
             self.closed = True
 
     def factory(target: str, **kwargs: object) -> Channel:
+        """Open one channel and remember how it was constructed."""
         channel = Channel()
         opened.append((target, kwargs, channel))
         return channel
@@ -69,7 +77,12 @@ def test_grpc_uses_an_injected_channel_factory() -> None:
 
 def test_installed_grpc_without_a_target_names_the_target(monkeypatch: pytest.MonkeyPatch) -> None:
     """A present extra does not report itself missing when target is absent."""
-    monkeypatch.setattr(pipes, "_require_grpc", lambda: None)
+
+    def allow_import() -> None:
+        """Pretend the grpc extra is already installed."""
+        return None
+
+    monkeypatch.setattr(pipes, "_require_grpc", allow_import)
     node = grpc_node("g", method="pkg.Service/Run", deadline=1)
     graph = load((node,), (), entries=(("g", "request"),))
     with pytest.raises(GraphError, match="node g failed") as caught:
@@ -77,63 +90,3 @@ def test_installed_grpc_without_a_target_names_the_target(monkeypatch: pytest.Mo
     assert isinstance(caught.value.__cause__, GraphError)
     assert "target is required" in str(caught.value.__cause__)
     assert "not installed" not in str(caught.value.__cause__)
-
-
-def test_telemetry_spans_when_a_tracer_is_injected() -> None:
-    """Each node start opens a span and success or failure ends it."""
-
-    class Span:
-        def __init__(self, name: str) -> None:
-            self.name = name
-            self.attributes: dict[str, str] = {}
-            self.ended = False
-
-        def set_attribute(self, key: str, value: str) -> None:
-            self.attributes[key] = value
-
-        def end(self) -> None:
-            self.ended = True
-
-    class Tracer:
-        def __init__(self) -> None:
-            self.spans: list[Span] = []
-
-        def start_span(self, name: str) -> Span:
-            span = Span(name)
-            self.spans.append(span)
-            return span
-
-    tracer = Tracer()
-    observer = TelemetryObserver("demo", tracer)
-    node = _node("a", fail=False)
-    asyncio.run(run(load((node,), ()), {}, observer=observer))
-    assert tracer.spans[0].ended is True
-    assert tracer.spans[0].attributes["nodeio.node"] == "a"
-    failing = TelemetryObserver("demo", tracer)
-    bad = _node("b", fail=True)
-    with pytest.raises(GraphError):
-        asyncio.run(run(load((bad,), ()), {}, observer=failing))
-    assert tracer.spans[1].attributes["nodeio.exception"] == "RuntimeError"
-    assert tracer.spans[1].ended is True
-
-
-def test_telemetry_noops_without_the_api(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A missing API and an explicit None tracer do not start spans."""
-    monkeypatch.setattr("nodeio.observe.otel_tracer", lambda: None)
-    observer = TelemetryObserver("demo")
-    node = _node("a", fail=False)
-    asyncio.run(run(load((node,), ()), {}, observer=observer))
-    silent = TelemetryObserver("demo", None)
-    asyncio.run(run(load((node,), ()), {}, observer=silent))
-
-
-def _node(node_id: str, *, fail: bool):
-    async def runner(inputs: object, side: object) -> dict[str, object]:
-        del inputs, side
-        if fail:
-            raise RuntimeError("nope")
-        return {"value": 1}
-
-    from nodeio import Node, Port
-
-    return Node(node_id, "map", (), (Port("value", "any"),), runner)

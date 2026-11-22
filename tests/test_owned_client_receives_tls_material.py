@@ -28,8 +28,8 @@ class _Stream:
 
 async def _empty() -> object:
     """Yield no body bytes."""
-    if False:
-        yield b""
+    for _chunk in ():
+        yield _chunk
 
 
 def test_owned_client_receives_tls_material(monkeypatch: pytest.MonkeyPatch) -> None:

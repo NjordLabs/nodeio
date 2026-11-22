@@ -37,7 +37,12 @@ first step of the host script.
 - Cancelling a run cancels asyncio node tasks. Thread and process
   workers keep running until they return. `close` still runs.
 - `nodeio[grpc]` and `nodeio[otel]` are optional. Importing `nodeio`
-  does not import `grpcio` or OpenTelemetry.
+  does not import `grpcio` or OpenTelemetry. Quality CI installs the
+  extras, so a test must pass both when those packages are present and
+  when they are absent. That job also covers the whole tree
+  (`--cov=.`), including lines inside tests.
+- Observer logging lives in `nodeio.notify`. Tests that replace the
+  logger patch `nodeio.notify._logger`.
 - `boundary.pyi` is the type stub. Pylint ignores `*.pyi` so the stub
   is not compared with `boundary.py` as a second copy of the same file.
 - Coverage data goes stale when sources change. Remove `.coverage`
@@ -58,5 +63,6 @@ is requested. `WORK-001` and `STREAM-001` stay open.
 - fix(pipes): stream http bodies and open grpc channels
 - feat(otel): span each node from an optional extra
 - docs(release): record 0.3.0 without publishing
+- fix(quality): bring complexity and docstring gates back under the limits
 
 *Last updated: 2026-11-22.*

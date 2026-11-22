@@ -14,7 +14,7 @@ from nodeio import (
     load,
     run,
 )
-from tests.support import boom, number
+from tests.support import boom, number, process_node
 from tests.workers import double
 
 
@@ -25,18 +25,7 @@ def test_local_executor_rejects_bad_runners() -> None:
     async def check() -> None:
         """Run this step."""
         executor = LocalExecutor()
-        produced = await executor.run(
-            Node(
-                "p",
-                "map",
-                (Port("value", "any"),),
-                (Port("value", "any"),),
-                double,
-                "process",
-            ),
-            {"value": 2},
-            {},
-        )
+        produced = await executor.run(process_node("p", double), {"value": 2}, {})
         assert produced["value"] == 4
         executor.close()
         executor.close()

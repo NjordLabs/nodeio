@@ -14,6 +14,7 @@ from nodeio import (
     run,
 )
 from nodeio.executors import SharedBytes
+from tests.support import process_node
 from tests.workers import double
 
 
@@ -26,14 +27,7 @@ def test_thread_and_process_executors() -> None:
         return {"value": inputs["value"]}
 
     threaded = Node("t", "map", (Port("value", "any"),), (Port("value", "any"),), sync, "thread")
-    processed = Node(
-        "p",
-        "map",
-        (Port("value", "any"),),
-        (Port("value", "any"),),
-        double,
-        "process",
-    )
+    processed = process_node("p", double)
     definition = load(
         (threaded, processed),
         (),

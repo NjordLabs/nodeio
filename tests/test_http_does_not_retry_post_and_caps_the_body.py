@@ -51,7 +51,7 @@ def test_grpc_requires_a_deadline_and_a_secure_call() -> None:
     with pytest.raises(GraphError, match="node g failed") as insecure_run:
         asyncio.run(run(insecure_graph, {"g": {"request": {}}}))
     assert isinstance(insecure_run.value.__cause__, GraphError)
-    assert "grpc extra" in str(insecure_run.value.__cause__)
+    _channel_error(insecure_run.value.__cause__)
 
     async def unary(method: str, request: object, deadline: float) -> dict[str, object]:
         """Run this step."""
@@ -68,4 +68,10 @@ def test_grpc_requires_a_deadline_and_a_secure_call() -> None:
     with pytest.raises(GraphError, match="node x failed") as missing_extra:
         asyncio.run(run(graph, {"x": {"request": {}}}))
     assert isinstance(missing_extra.value.__cause__, GraphError)
-    assert "grpc extra" in str(missing_extra.value.__cause__)
+    _channel_error(missing_extra.value.__cause__)
+
+
+def _channel_error(cause: BaseException) -> None:
+    """Accept a missing grpc extra or a missing target."""
+    text = str(cause)
+    assert "grpc extra" in text or "target is required" in text

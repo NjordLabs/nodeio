@@ -31,7 +31,10 @@ def test_caller_executor_stays_open() -> None:
     """A caller-supplied executor is not closed by run."""
 
     class Supplied:
+        """Executor the caller owns, so run must leave it open."""
+
         def __init__(self) -> None:
+            """Wrap a local executor and record close."""
             self.closed = False
             self._inner = LocalExecutor()
 
@@ -41,9 +44,11 @@ def test_caller_executor_stays_open() -> None:
             inputs: Mapping[str, object],
             side: Mapping[str, object],
         ) -> Mapping[str, object]:
+            """Forward the node to the wrapped executor."""
             return await self._inner.run(node, inputs, side)
 
         def close(self) -> None:
+            """Close the wrapped executor once."""
             self.closed = True
             self._inner.close()
 
@@ -60,6 +65,7 @@ def test_fail_fast_cancels_a_running_sibling() -> None:
     cancelled = asyncio.Event()
 
     async def slow(inputs: Mapping[str, object], side: Mapping[str, object]) -> dict[str, object]:
+        """Wait until the sibling failure cancels this node."""
         del inputs, side
         started.set()
         try:
@@ -74,6 +80,7 @@ def test_fail_fast_cancels_a_running_sibling() -> None:
     definition = load((slow_node, bad), ())
 
     async def scenario() -> None:
+        """Run the pair and expect the failure to cancel the sibling."""
         with pytest.raises(GraphError, match="node bad failed"):
             await run(definition, {}, limit=2)
 
@@ -107,13 +114,18 @@ def test_observer_errors_do_not_replace_the_outcome() -> None:
     """An observer failure is logged and does not hide the node result."""
 
     class Boom:
+        """Observer whose every hook raises."""
+
         def on_start(self, *_args: object, **_kwargs: object) -> None:
+            """Raise so the guard must swallow the start hook."""
             raise RuntimeError("observer")
 
         def on_success(self, *_args: object, **_kwargs: object) -> None:
+            """Raise so the guard must swallow the success hook."""
             raise RuntimeError("observer")
 
         def on_exception(self, *_args: object, **_kwargs: object) -> None:
+            """Raise so the guard must swallow the exception hook."""
             raise RuntimeError("observer")
 
     node = Node("a", "map", (), (Port("value", "any"),), _value(4))
@@ -131,26 +143,39 @@ def test_logging_an_observer_failure_can_itself_fail(monkeypatch: pytest.MonkeyP
     node = Node("a", "map", (), (Port("value", "any"),), _value(1))
 
     class Boom:
+        """Observer that fails only while reporting success."""
+
         def on_start(self, *_args: object, **_kwargs: object) -> None:
+            """Allow the node to start."""
             return None
 
         def on_success(self, *_args: object, **_kwargs: object) -> None:
+            """Force the observer guard to log a failure."""
             raise RuntimeError("observer")
 
         def on_exception(self, *_args: object, **_kwargs: object) -> None:
+            """Ignore exception notices."""
             return None
 
     def broken() -> object:
+        """Raise before a logger can be obtained."""
         raise RuntimeError("no logger")
 
-    monkeypatch.setattr(sys.modules["nodeio.run"], "_logger", broken)
+    monkeypatch.setattr(sys.modules["nodeio.notify"], "_logger", broken)
     assert asyncio.run(run(load((node,), ()), {}, observer=Boom()))["a"]["value"] == 1
 
     class Loud:
+        """Logger whose exception method fails."""
+
         def exception(self, *_args: object, **_kwargs: object) -> None:
+            """Raise instead of writing the log record."""
             raise RuntimeError("log failed")
 
-    monkeypatch.setattr(sys.modules["nodeio.run"], "_logger", lambda: Loud())
+    def loud() -> Loud:
+        """Return a logger that fails while recording the observer error."""
+        return Loud()
+
+    monkeypatch.setattr(sys.modules["nodeio.notify"], "_logger", loud)
     assert asyncio.run(run(load((node,), ()), {}, observer=Boom()))["a"]["value"] == 1
 
 
