@@ -208,3 +208,6 @@ __marimo__/
 
 # macOS
 .DS_Store
+
+# Wheel built for the container quality gate.
+.ci-wheels/
