@@ -7,6 +7,7 @@ repository `NjordLabs/nodeio`. [`v0.3.0`](https://github.com/NjordLabs/nodeio/re
 is the GitHub Release.
 The wheel sha256 is
 `b8d05cd111165e9e7ed01ce49af15917e5b5c17be3298a624f4ddb6c7b8038b9`.
+Pins: guardrails `1.17.1` (`8508e936`), scaffold `1.14.3` (`1fca8a3b`), pydevops `3.11.1` (`efef9824`), commondevops `v6.12.0` (`ff65e7ef`).
 
 ## Scope
 
