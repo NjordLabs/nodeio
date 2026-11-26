@@ -55,6 +55,26 @@ def test_telemetry_spans_when_a_tracer_is_injected() -> None:
     assert tracer.spans[1].attributes["nodeio.exception"] == "RuntimeError"
     assert tracer.spans[1].ended is True
 
+    async def cancel_run() -> None:
+        """Cancel a node that is waiting and expect its span to end."""
+        waiting = TelemetryObserver("demo", tracer)
+
+        async def sleep(inputs: object, side: object) -> dict[str, object]:
+            del inputs, side
+            await asyncio.sleep(30)
+            return {}
+
+        paused = Node("c", "map", (), (), sleep)
+        task = asyncio.create_task(run(load((paused,), ()), {}, observer=waiting))
+        await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(cancel_run())
+    assert tracer.spans[-1].ended is True
+    assert tracer.spans[-1].attributes["nodeio.exception"] == "CancelledError"
+
 
 def test_telemetry_noops_without_the_api(monkeypatch: pytest.MonkeyPatch) -> None:
     """A missing API and an explicit None tracer do not start spans."""

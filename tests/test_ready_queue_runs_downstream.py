@@ -8,6 +8,7 @@ import json
 import pytest
 
 from nodeio import (
+    Edge,
     GraphError,
     LoggingObserver,
     load,
@@ -34,6 +35,15 @@ def test_missing_seed() -> None:
     definition = load((node,), (), entries=(("a", "value"),))
     with pytest.raises(GraphError, match="missing inputs"):
         asyncio.run(run(definition, {}))
+    with pytest.raises(GraphError, match="unknown input"):
+        asyncio.run(run(definition, {"a": {"value": 1, "other": 2}}))
+    linked = load(
+        (node, async_node("b")),
+        (Edge("a", "value", "b", "value"),),
+        entries=(("a", "value"),),
+    )
+    with pytest.raises(GraphError, match="cannot be seeded"):
+        asyncio.run(run(linked, {"a": {"value": 1}, "b": {"value": 9}}))
 
 
 def test_observer_omits_values(capsys: pytest.CaptureFixture[str]) -> None:

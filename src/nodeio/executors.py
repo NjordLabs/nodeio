@@ -8,6 +8,7 @@ that boundary through shared memory instead of being pickled.
 from __future__ import annotations
 
 import asyncio
+import functools
 from collections.abc import Awaitable, Callable, Mapping
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import shared_memory
@@ -110,7 +111,7 @@ class LocalExecutor:
         if node.executor == "async":
             return await runner(inputs, side)  # type: ignore[misc]
         if node.executor == "thread":
-            return await asyncio.to_thread(runner, inputs, side)
+            return await _cancellable(None, functools.partial(runner, inputs, side))
         if node.executor == "process":
             return await self._in_process(runner, inputs, side)
         raise ValueError(f"unknown executor {node.executor}")
@@ -127,13 +128,9 @@ class LocalExecutor:
             side_payload = _share_into(side, shared)
             pool = self._processes or ProcessPoolExecutor(max_workers=1)
             self._processes = pool
-            loop = asyncio.get_running_loop()
-            result: object = await loop.run_in_executor(
+            result = await _cancellable(
                 pool,
-                _run_with_shared,
-                runner,
-                payload,
-                side_payload,
+                functools.partial(_run_with_shared, runner, payload, side_payload),
             )
             return result
         finally:
@@ -144,6 +141,31 @@ class LocalExecutor:
         if self._processes is not None:
             self._processes.shutdown(wait=True)
             self._processes = None
+
+
+async def _cancellable(pool: ProcessPoolExecutor | None, work: Callable[[], object]) -> object:
+    """Run ``work`` on ``pool`` and cancel the future if this task is cancelled.
+
+    A worker that has already started keeps running. ``future.cancel``
+    only drops work that has not started.
+
+    Args:
+        pool: Executor. ``None`` uses the default thread pool.
+        work: Callable with no arguments.
+
+    Returns:
+        Whatever ``work`` returns.
+
+    Raises:
+        asyncio.CancelledError: This task was cancelled. Queued work is dropped.
+    """
+    loop = asyncio.get_running_loop()
+    future = loop.run_in_executor(pool, work)
+    try:
+        return await future
+    except asyncio.CancelledError:
+        future.cancel()
+        raise
 
 
 class SharedBytes:

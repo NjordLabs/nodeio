@@ -51,6 +51,7 @@ async def http_exchange(
     verify: bool | str,
     cert: tuple[str, str] | None,
     max_bytes: int,
+    host: str = "",
 ) -> tuple[int, bytes]:
     """Perform one HTTP request with an owned client.
 
@@ -64,6 +65,8 @@ async def http_exchange(
         verify: TLS verification flag or a CA bundle path.
         cert: Certificate and key paths, or ``None``.
         max_bytes: Maximum response body size.
+        host: Original host sent as ``Host`` and as the TLS server name.
+            Empty skips both.
 
     Returns:
         The status code and the response body.
@@ -77,7 +80,12 @@ async def http_exchange(
             cert=cert,
             follow_redirects=False,
         ) as owned,
-        owned.stream(method, url) as response,
+        owned.stream(
+            method,
+            url,
+            headers={"host": host} if host else None,
+            extensions={"sni_hostname": host} if host else None,
+        ) as response,
     ):
         status = int(response.status_code)
         body = await _read_limited(response, max_bytes)

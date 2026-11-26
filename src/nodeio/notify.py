@@ -58,6 +58,9 @@ async def _execute(
                 state.executor.run(node, inputs, state.side),
                 state.timeout,
             )
+        except asyncio.CancelledError as exc:
+            _notify_exception(state, node.id, started, exc)
+            raise
         except Exception as exc:
             _notify_exception(state, node.id, started, exc)
             if state.policy == "fail":
@@ -67,7 +70,7 @@ async def _execute(
         return produced, time.perf_counter() - started
 
 
-def _notify_exception(state: _State, node_id: str, started: float, exc: Exception) -> None:
+def _notify_exception(state: _State, node_id: str, started: float, exc: BaseException) -> None:
     observer = state.observer
     if observer is None:
         return

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Seeds for an unknown port or a connected port are rejected. Demux
+  accepts only `left` and `right`. A cancelled node ends its span.
+- An HTTP request is pinned to an address that is global. Shared and
+  multicast answers are rejected. Injected clients stop reading at
+  `max_bytes`. Cancelling a run drops thread and process work that has
+  not started. A worker that has already started still runs to completion.
+
 ## 0.3.0 - 2026-11-22
 
 - A run closes an executor it created. A caller-supplied executor stays

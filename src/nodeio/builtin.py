@@ -127,12 +127,18 @@ def demux(node_id: str) -> Node:
 
         Returns:
             The output mapping.
+
+        Raises:
+            GraphError: ``key`` is not ``left`` or ``right``.
         """
         _ = side
         value = inputs["value"]
-        if inputs["key"] == "left":
+        key = inputs["key"]
+        if key == "left":
             return {"left": value, "right": None}
-        return {"left": None, "right": value}
+        if key == "right":
+            return {"left": None, "right": value}
+        raise GraphError("key must be left or right")
 
     return Node(
         node_id,
@@ -172,9 +178,12 @@ def subgraph_node(node_id: str, name: str) -> Node:
 
         options = current_options()
         child = subgraph(name)
+        seeds: dict[str, dict[str, object]] = {}
+        if _has_input(child, "in", "value"):
+            seeds = {"in": {"value": inputs["value"]}}
         outputs = await run(
             child,
-            {"in": {"value": inputs["value"]}},
+            seeds,
             executor=options.executor,
             observer=options.observer,
             limit=options.limit,
@@ -194,6 +203,13 @@ def subgraph_node(node_id: str, name: str) -> Node:
         (Port("value", "any"),),
         (Port("value", "any"),),
         runner,
+    )
+
+
+def _has_input(definition: GraphDefinition, node_id: str, port: str) -> bool:
+    return any(
+        node.id == node_id and any(item.name == port for item in node.inputs)
+        for node in definition.nodes
     )
 
 

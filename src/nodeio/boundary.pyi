@@ -11,7 +11,9 @@ async def http_exchange(
     verify: bool | str,
     cert: tuple[str, str] | None,
     max_bytes: int,
+    host: str = "",
 ) -> tuple[int, bytes]: ...
+async def _read_limited(response: object, max_bytes: int) -> bytes: ...
 def grpc_channel(
     target: str,
     allow_insecure: bool,
