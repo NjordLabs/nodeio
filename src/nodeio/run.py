@@ -205,12 +205,19 @@ def _state(
 
 
 def _seed(definition: GraphDefinition, seeds: Mapping[str, Mapping[str, object]]) -> Values:
+    known = {(node.id, port.name) for node in definition.nodes for port in node.inputs}
+    connected = {(edge.target, edge.target_port) for edge in definition.edges}
     values: Values = {}
     provided: set[tuple[str, str]] = set()
     for node_id, ports in seeds.items():
         for port, value in ports.items():
-            values[(node_id, port)] = value
-            provided.add((node_id, port))
+            key = (node_id, port)
+            if key not in known:
+                raise GraphError(f"unknown input {node_id}.{port}")
+            if key in connected:
+                raise GraphError(f"connected input {node_id}.{port} cannot be seeded")
+            values[key] = value
+            provided.add(key)
     missing = [
         f"{node}.{port}" for node, port in definition.entries if (node, port) not in provided
     ]

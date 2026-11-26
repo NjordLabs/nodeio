@@ -54,7 +54,7 @@ class _Owned:
         """Ignore the context exit."""
         return False
 
-    def stream(self, method: str, url: str) -> _Stream:
+    def stream(self, method: str, url: str, **_extra: object) -> _Stream:
         """Return the prepared response stream."""
         del method, url
         return _Stream(self._response)

@@ -323,3 +323,39 @@ milestones:
               - sh scripts/check-ci-local.sh
             guardrail_refs:
               - PY-TEST-002
+      - id: NET-001
+        status: open
+        title: Reject unsafe HTTP targets and invalid graph inputs
+        overview:
+          problem: >-
+            An HTTP request could follow a DNS answer that was not global,
+            and a seed or demux key could name a port the graph does not have.
+          goal: >-
+            Requests use a checked global address, and seeds and demux keys
+            are rejected when they do not match the graph.
+        decision: >-
+          In the context of outbound HTTP and graph inputs, facing an
+          address that was checked and then not used, we decided to pin
+          the connection to a global address and reject unknown seeds, to
+          achieve a request that matches the check, accepting that an
+          injected client receives the pinned URL.
+        acceptance_criteria:
+          - A non-global or multicast address is rejected
+          - The request URL uses the address that was checked
+          - Unknown and connected seeds are rejected
+          - Demux accepts only left and right
+        guardrail_refs:
+          - PY-SEC-006
+        tasks:
+          - id: NET-001-T1
+            status: open
+            title: Pin HTTP and validate seeds and demux keys
+            instructions:
+              files:
+                - src/nodeio/pipes.py
+                - src/nodeio/run.py
+                - src/nodeio/builtin.py
+            verification:
+              - sh scripts/check-ci-local.sh
+            guardrail_refs:
+              - PY-SEC-006

@@ -15,9 +15,9 @@ import socket
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Protocol, cast
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
-from nodeio.boundary import grpc_channel, http_exchange, named_logger
+from nodeio.boundary import _read_limited, grpc_channel, http_exchange, named_logger
 from nodeio.errors import GraphError
 from nodeio.graph import Node, Port
 
@@ -89,9 +89,10 @@ def http_node(
 ) -> Node:
     """Build a node that performs one HTTP request.
 
-    The host is resolved when the request starts. Private, loopback, and
-    link-local answers are rejected unless ``allow_private`` is true.
-    That check does not stop DNS rebinding after the request has started.
+    The host is resolved when the request starts. Any address that is not
+    global is rejected unless ``allow_private`` is true. The request then
+    uses the address that was checked, with the original host as ``Host``
+    and as the TLS server name.
     Clients constructed here do not follow redirects. ``verify=False``
     requires ``allow_insecure``. A CA path string is still allowed.
     A final HTTP 5xx on an idempotent method raises after retries.
@@ -133,14 +134,14 @@ def http_node(
         _ = side
         method = str(inputs["method"]).upper()
         url = str(inputs["url"])
-        _check_url(
+        pinned, host = _pin_url(
             url,
             allow_insecure=allow_insecure,
             allow_hosts=allow_hosts,
             allow_private=allow_private,
         )
         return await _attempts(
-            client, method, url, timeout, max_bytes, verify, cert, retries, backoff
+            client, method, pinned, host, timeout, max_bytes, verify, cert, retries, backoff
         )
 
     return Node(
@@ -152,18 +153,20 @@ def http_node(
     )
 
 
-def _check_url(
+def _pin_url(
     url: str,
     *,
     allow_insecure: bool,
     allow_hosts: tuple[str, ...],
     allow_private: bool,
-) -> None:
+) -> tuple[str, str]:
     parsed = urlparse(url)
     _check_scheme(parsed.scheme, allow_insecure)
-    if allow_hosts and parsed.hostname not in allow_hosts:
-        raise GraphError(f"host {parsed.hostname} is not allowed")
-    _reject_private(parsed.hostname, allow_private=allow_private)
+    host = parsed.hostname
+    if allow_hosts and host not in allow_hosts:
+        raise GraphError(f"host {host} is not allowed")
+    address = _checked_address(host, allow_private=allow_private)
+    return _rewrite(parsed, address), _host_header(parsed)
 
 
 def _check_scheme(scheme: str, allow_insecure: bool) -> None:
@@ -173,13 +176,39 @@ def _check_scheme(scheme: str, allow_insecure: bool) -> None:
         raise GraphError(f"unsupported URL scheme {scheme}")
 
 
-def _reject_private(host: str | None, *, allow_private: bool) -> None:
-    if allow_private or host is None:
-        return
+def _checked_address(host: str | None, *, allow_private: bool) -> str:
+    if host is None:
+        raise GraphError("url has no host")
+    chosen = ""
     for address in _addresses(host):
         ip = ipaddress.ip_address(address)
-        if ip.is_private or ip.is_loopback or ip.is_link_local:
+        if not allow_private and (not ip.is_global or ip.is_multicast):
             raise GraphError(f"host {host} resolves to a restricted address")
+        if not chosen:
+            chosen = address
+    if not chosen:
+        raise GraphError(f"cannot resolve host {host}")
+    return chosen
+
+
+def _rewrite(parsed: ParseResult, address: str) -> str:
+    host = f"[{address}]" if ":" in address else address
+    if parsed.port is not None:
+        host = f"{host}:{parsed.port}"
+    userinfo = ""
+    if parsed.username is not None:
+        userinfo = parsed.username
+        if parsed.password is not None:
+            userinfo = f"{userinfo}:{parsed.password}"
+        userinfo = f"{userinfo}@"
+    return parsed._replace(netloc=f"{userinfo}{host}").geturl()
+
+
+def _host_header(parsed: ParseResult) -> str:
+    host = parsed.hostname or ""
+    if parsed.port not in {None, 80, 443}:
+        return f"{host}:{parsed.port}"
+    return host
 
 
 def _addresses(host: str) -> tuple[str, ...]:
@@ -199,6 +228,7 @@ async def _attempts(
     client: object | None,
     method: str,
     url: str,
+    host: str,
     timeout: float,
     max_bytes: int,
     verify: bool | str,
@@ -211,8 +241,8 @@ async def _attempts(
     for attempt in range(attempts):
         await _pause(attempt, backoff)
         started = time.perf_counter()
-        last = await _once(client, method, url, timeout, max_bytes, verify, cert)
-        _log_http(method, url, last["status"], attempt, time.perf_counter() - started)
+        last = await _once(client, method, url, host, timeout, max_bytes, verify, cert)
+        _log_http(method, host, last["status"], attempt, time.perf_counter() - started)
         status = _status(last)
         if status < 500 or method not in _IDEMPOTENT:
             return last
@@ -241,8 +271,7 @@ def _jitter() -> float:
     return 0.5 + (secrets.randbelow(501) / 1000)
 
 
-def _log_http(method: str, url: str, status: object, attempt: int, duration_s: float) -> None:
-    host = urlparse(url).hostname or ""
+def _log_http(method: str, host: str, status: object, attempt: int, duration_s: float) -> None:
     named_logger("nodeio.http").info({
         "attempt": attempt,
         "duration_s": duration_s,
@@ -257,13 +286,14 @@ async def _once(
     client: object | None,
     method: str,
     url: str,
+    host: str,
     timeout: float,
     max_bytes: int,
     verify: bool | str,
     cert: tuple[str, str] | None,
 ) -> dict[str, object]:
     if client is None:
-        status, body = await http_exchange(method, url, timeout, verify, cert, max_bytes)
+        status, body = await http_exchange(method, url, timeout, verify, cert, max_bytes, host)
         return {"status": status, "body": body}
     client_status, client_body = await _read_client(client, method, url, timeout, max_bytes)
     return {"status": client_status, "body": client_body}
@@ -277,7 +307,10 @@ async def _read_client(
     max_bytes: int,
 ) -> tuple[object, bytes]:
     response = await _as_client(client).request(method, url, timeout=timeout)
-    body = response.content
+    if callable(getattr(response, "aiter_bytes", None)):
+        body = await _read_limited(response, max_bytes)
+        return response.status_code, body
+    body = bytes(response.content)
     if len(body) > max_bytes:
         raise GraphError("response exceeds max_bytes")
     return response.status_code, body

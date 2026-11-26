@@ -46,7 +46,7 @@ def test_owned_client_receives_tls_material(monkeypatch: pytest.MonkeyPatch) -> 
             """Run this step."""
             return False
 
-        def stream(self, method: str, url: str) -> _Stream:
+        def stream(self, method: str, url: str, **_extra: object) -> _Stream:
             """Run this step."""
             del method, url
             return _Stream()

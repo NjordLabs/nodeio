@@ -7,6 +7,7 @@ import asyncio
 import pytest
 
 from nodeio import (
+    GraphError,
     Node,
     Port,
     demux,
@@ -55,5 +56,7 @@ def test_gate_mux_demux_and_subgraph() -> None:
     split = load((demux("d"),), (), entries=(("d", "key"), ("d", "value")))
     routed = asyncio.run(run(split, {"d": {"key": "right", "value": 9}}))
     assert routed["d"] == {"left": None, "right": 9}
+    with pytest.raises(GraphError, match="node d failed"):
+        asyncio.run(run(split, {"d": {"key": "middle", "value": 9}}))
     with pytest.raises(ValueError):
         register_subgraph("", GraphDefinition((), ()))
