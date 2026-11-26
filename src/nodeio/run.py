@@ -204,6 +204,29 @@ def _state(
     )
 
 
+def _accept_seed(
+    key: tuple[str, str], known: set[tuple[str, str]], connected: set[tuple[str, str]]
+) -> None:
+    """Reject a seed that names an unknown port or a port an edge already fills.
+
+    A connected port is filled by the upstream node. Seeding it as well
+    made the queue and the seed disagree about which value was ready.
+
+    Args:
+        key: Node id and input port.
+        known: Input ports that exist on the graph.
+        connected: Input ports that already have an incoming edge.
+
+    Raises:
+        GraphError: The port does not exist, or an edge already targets it.
+    """
+    node_id, port = key
+    if key not in known:
+        raise GraphError(f"unknown input {node_id}.{port}")
+    if key in connected:
+        raise GraphError(f"connected input {node_id}.{port} cannot be seeded")
+
+
 def _seed(definition: GraphDefinition, seeds: Mapping[str, Mapping[str, object]]) -> Values:
     known = {(node.id, port.name) for node in definition.nodes for port in node.inputs}
     connected = {(edge.target, edge.target_port) for edge in definition.edges}
@@ -212,10 +235,7 @@ def _seed(definition: GraphDefinition, seeds: Mapping[str, Mapping[str, object]]
     for node_id, ports in seeds.items():
         for port, value in ports.items():
             key = (node_id, port)
-            if key not in known:
-                raise GraphError(f"unknown input {node_id}.{port}")
-            if key in connected:
-                raise GraphError(f"connected input {node_id}.{port} cannot be seeded")
+            _accept_seed(key, known, connected)
             values[key] = value
             provided.add(key)
     missing = [
