@@ -227,9 +227,32 @@ def _accept_seed(
         raise GraphError(f"connected input {node_id}.{port} cannot be seeded")
 
 
-def _seed(definition: GraphDefinition, seeds: Mapping[str, Mapping[str, object]]) -> Values:
+def _seed_index(definition: GraphDefinition) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+    """Return the input ports that exist and the ones an edge already fills."""
     known = {(node.id, port.name) for node in definition.nodes for port in node.inputs}
     connected = {(edge.target, edge.target_port) for edge in definition.edges}
+    return known, connected
+
+
+def _require_entries(definition: GraphDefinition, provided: set[tuple[str, str]]) -> None:
+    """Raise when a declared entry was not given a seed.
+
+    Args:
+        definition: Graph whose entry ports must be seeded.
+        provided: Node and port pairs present in the seed mapping.
+
+    Raises:
+        GraphError: One or more entry ports have no seed.
+    """
+    missing = [
+        f"{node}.{port}" for node, port in definition.entries if (node, port) not in provided
+    ]
+    if missing:
+        raise GraphError("missing inputs " + ", ".join(missing))
+
+
+def _seed(definition: GraphDefinition, seeds: Mapping[str, Mapping[str, object]]) -> Values:
+    known, connected = _seed_index(definition)
     values: Values = {}
     provided: set[tuple[str, str]] = set()
     for node_id, ports in seeds.items():
@@ -238,11 +261,7 @@ def _seed(definition: GraphDefinition, seeds: Mapping[str, Mapping[str, object]]
             _accept_seed(key, known, connected)
             values[key] = value
             provided.add(key)
-    missing = [
-        f"{node}.{port}" for node, port in definition.entries if (node, port) not in provided
-    ]
-    if missing:
-        raise GraphError("missing inputs " + ", ".join(missing))
+    _require_entries(definition, provided)
     return values
 
 
