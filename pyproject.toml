@@ -16,6 +16,7 @@ classifiers = [
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
 description = "Async graph engine for Python services"
@@ -25,21 +26,26 @@ license-files = ["LICENSE"]
 readme = "README.md"
 
 [project.optional-dependencies]
+grpc = ["grpcio>=1.70"]
+http = ["httpx>=0.28"]
+otel = ["opentelemetry-api>=1.27"]
+
+[dependency-groups]
 dev = [
   "bandit[toml]==1.9.4",
   "commitizen>=3.0",
   "coverage[toml]>=7.13.5",
   "httpx>=0.28",
+  "hypothesis>=6.140",
   "interrogate>=1.7.0",
   "mypy>=1.20.2",
+  "pip-audit>=2.9",
   "pylint>=3.0",
   "pytest>=8.0",
   "pytest-cov>=6.0",
+  "radon>=6.0.1",
   "ruff==0.15.12",
 ]
-grpc = ["grpcio>=1.70"]
-http = ["httpx>=0.28"]
-otel = ["opentelemetry-api>=1.27"]
 
 [project.urls]
 Changelog = "https://github.com/NjordLabs/nodeio/blob/main/CHANGELOG.md"
@@ -88,6 +94,14 @@ warn_unused_configs = true
 [[tool.mypy.overrides]]
 disallow_untyped_defs = false
 module = "tests.*"
+
+[[tool.mypy.overrides]]
+ignore_missing_imports = true
+module = "hypothesis"
+
+[[tool.mypy.overrides]]
+disallow_untyped_decorators = false
+module = "tests.test_graph_properties"
 
 [tool.pylint.format]
 max-line-length = 100
