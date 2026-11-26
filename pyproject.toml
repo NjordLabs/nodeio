@@ -4,10 +4,10 @@ requires = ["setuptools>=82.0.1", "wheel>=0.47.0"]
 
 [project]
 name = "nodeio"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
-  "mimirlog @ https://github.com/NjordLabs/mimirlog/releases/download/v0.2.0/mimirlog-0.2.0-py3-none-any.whl#sha256=bbf5794ca4182ed638549fc139fa4cc0a10c9d6be0926108725e2620984430b4",
-  "pymjolnir @ https://github.com/NjordLabs/pymjolnir/releases/download/v0.1.1/pymjolnir-0.1.1-py3-none-any.whl#sha256=5999ff4b244ee0215c96f1228b042f18ad33699dbbc2964d01abd2103eaf050d",
+  "mimirlog @ https://github.com/NjordLabs/mimirlog/releases/download/v0.2.1/mimirlog-0.2.1-py3-none-any.whl#sha256=0e1ea1a0aed6cacab55d91da68511231c22232ec1ed569a2122e8f0b5c78f4ab",
+  "pymjolnir @ https://github.com/NjordLabs/pymjolnir/releases/download/v0.1.2/pymjolnir-0.1.2-py3-none-any.whl#sha256=26842daa3408884cf6bb70e3130f832ee8675426e957989c3e76d20bb31c8180",
 ]
 requires-python = ">=3.13"
 authors = [{name = "pirlruc"}]

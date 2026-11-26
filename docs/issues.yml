@@ -324,7 +324,7 @@ milestones:
             guardrail_refs:
               - PY-TEST-002
       - id: NET-001
-        status: open
+        status: done
         title: Reject unsafe HTTP targets and invalid graph inputs
         overview:
           problem: >-
@@ -348,7 +348,7 @@ milestones:
           - PY-SEC-006
         tasks:
           - id: NET-001-T1
-            status: open
+            status: done
             title: Pin HTTP and validate seeds and demux keys
             instructions:
               files:

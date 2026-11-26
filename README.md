@@ -6,14 +6,14 @@ Each call runs on its own values.
 The package is not on PyPI. Install the wheel from the GitHub Release:
 
 ```bash
-pip install https://github.com/NjordLabs/nodeio/releases/download/v0.3.0/nodeio-0.3.0-py3-none-any.whl
+pip install https://github.com/NjordLabs/nodeio/releases/download/v0.4.0/nodeio-0.4.0-py3-none-any.whl
 ```
 
 HTTP and gRPC clients are extras: `nodeio[http]` and `nodeio[grpc]`.
 Add them to the same wheel:
 
 ```bash
-pip install "nodeio[http] @ https://github.com/NjordLabs/nodeio/releases/download/v0.3.0/nodeio-0.3.0-py3-none-any.whl"
+pip install "nodeio[http] @ https://github.com/NjordLabs/nodeio/releases/download/v0.4.0/nodeio-0.4.0-py3-none-any.whl"
 ```
 
 A timeout is required. Plain HTTP and insecure gRPC stay off unless
