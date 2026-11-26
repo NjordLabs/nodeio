@@ -4,10 +4,11 @@
 
 `nodeio` is an async graph engine. Python 3.13 and 3.14. Public
 repository `NjordLabs/nodeio`. [`v0.4.0`](https://github.com/NjordLabs/nodeio/releases/tag/v0.4.0)
-is the GitHub Release.
-The wheel sha256 is
-The wheel sha256 is written when the release workflow uploads it.
-Pins: guardrails `1.17.1` (`8508e936`), scaffold `1.14.3` (`1fca8a3b`), pydevops `3.11.1` (`efef9824`), commondevops `v6.12.0` (`ff65e7ef`).
+is the GitHub Release. The wheel sha256 is written when the release
+workflow uploads it. That workflow pins pydevops `3.11.3`
+(`8b0d7d08`), which checks the repository out before `gh` runs.
+Quality jobs stay on pydevops `3.11.1` (`efef9824`).
+Pins: guardrails `1.17.1` (`8508e936`), scaffold `1.14.3` (`1fca8a3b`), commondevops `v6.12.0` (`ff65e7ef`).
 
 ## Scope
 
